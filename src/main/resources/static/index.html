@@ -28,8 +28,9 @@
   <div class="main-wrapper">
     <header>
       <div class="page-title" id="pageTitle">Risk Overview</div>
-      <div class="header-actions">
-        <button class="btn-primary" onclick="openNewProjectModal()">+ New Project</button>
+      <div class="header-actions" style="display:flex; gap:10px;">
+        <button class="btn-primary" onclick="openUploadZipModal()">📦 Upload ZIP Project</button>
+        <button class="btn-secondary" onclick="openNewProjectModal()">📁 Local Directory</button>
       </div>
     </header>
 
@@ -63,31 +64,38 @@
             </div>
           </div>
           <div class="stat-card">
-            <h4 style="margin-bottom: 12px; color: var(--text-main);">Scan Status & Health</h4>
-            <div id="scanStatusBadge" style="padding: 12px; background: #FAF8F5; border-radius: 6px; border: 1px solid var(--border-subtle); margin-top: 20px; font-size: 13.5px;">
+            <h4 style="margin-bottom: 12px; color: var(--text-main);">Scan Status & Downloads</h4>
+            <div id="scanStatusBadge" style="padding: 12px; background: #FAF8F5; border-radius: 6px; border: 1px solid var(--border-subtle); margin-top: 14px; font-size: 13.5px;">
               Ready for scanning. No previous runs cached.
+            </div>
+            <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+              <button id="btnDownloadCorrectedZip" class="btn-primary" onclick="downloadCorrectedZip()" style="display:none; width: 100%; text-align: center;">
+                ⬇️ Download Auto-Corrected ZIP
+              </button>
+              <button id="btnExportCsv" class="btn-secondary" onclick="exportCsvReport()" style="display:none; width: 100%;">
+                📄 Download CSV Report
+              </button>
             </div>
           </div>
         </div>
 
         <div class="card-table">
           <div class="table-header">
-            <h3>Active Scanned Files & Risk Severity</h3>
-            <button class="btn-secondary" id="btnExportCsv" onclick="exportCsvReport()" style="display:none;">Export CSV Report</button>
+            <h3>Active Scanned Files & Detected Bugs</h3>
           </div>
           <table>
             <thead>
               <tr>
                 <th>File Name</th>
-                <th>Path</th>
+                <th>Language / Path</th>
                 <th>Risk Score</th>
                 <th>Category</th>
-                <th>Contributing Factors</th>
+                <th>Contributing Factors & Bugs</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody id="dashboardPredictionsBody">
-              <tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--text-muted);">No scan executed yet. Create or select a project and run a scan to see your results.</td></tr>
+              <tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--text-muted);">No scan executed yet. Upload a ZIP or register a project to see your results.</td></tr>
             </tbody>
           </table>
         </div>
@@ -97,15 +105,15 @@
       <div id="view-projects" class="tab-view" style="display:none;">
         <div class="card-table">
           <div class="table-header">
-            <h3>Registered Projects</h3>
-            <button class="btn-primary" onclick="openNewProjectModal()">+ Add Project</button>
+            <h3>Registered Projects & Codebases</h3>
+            <button class="btn-primary" onclick="openUploadZipModal()">+ Upload ZIP</button>
           </div>
           <table>
             <thead>
               <tr>
                 <th>ID</th>
                 <th>Project Name</th>
-                <th>Source Code Directory</th>
+                <th>Language / Source Directory</th>
                 <th>Files</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -122,7 +130,7 @@
       <div id="view-scans" class="tab-view" style="display:none;">
         <div class="card-table">
           <div class="table-header">
-            <h3>Scan Runs & History</h3>
+            <h3>Scan Runs</h3>
             <button class="btn-secondary" onclick="loadScansList()">Refresh</button>
           </div>
           <table>
@@ -134,7 +142,7 @@
                 <th>Status</th>
                 <th>Avg Risk</th>
                 <th>High / Critical</th>
-                <th>Timestamp</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="scansTableBody">
@@ -157,11 +165,11 @@
             <thead>
               <tr>
                 <th>File Name</th>
-                <th>Relative Path</th>
+                <th>Path</th>
                 <th>Risk Score</th>
                 <th>Category</th>
                 <th>Confidence</th>
-                <th>Risk Explanations</th>
+                <th>Risk & Bug Explanations</th>
                 <th>Remediation</th>
               </tr>
             </thead>
@@ -176,7 +184,7 @@
       <div id="view-remediation" class="tab-view" style="display:none;">
         <div class="card-table">
           <div class="table-header">
-            <h3>Remediation Tasks & Testing Priority</h3>
+            <h3>Remediation Tasks</h3>
             <button class="btn-secondary" onclick="loadRemediationTasks()">Refresh Tasks</button>
           </div>
           <table>
@@ -191,7 +199,7 @@
               </tr>
             </thead>
             <tbody id="remediationTableBody">
-              <tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No remediation tasks created yet. Click "Remediate" on any high-risk file finding to create one.</td></tr>
+              <tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No remediation tasks created yet. Click "Remediate" on any file finding to add one.</td></tr>
             </tbody>
           </table>
         </div>
@@ -199,6 +207,9 @@
 
     </div>
   </div>
+
+  <!-- ZIP Upload Hidden Form / Modal -->
+  <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="handleZipUpload(event)">
 
   <script src="/js/app.js"></script>
 </body>

@@ -75,7 +75,6 @@ async function loadDashboard() {
       return;
     }
 
-    // Default to the first project if not selected
     if (!currentProjectId && projects.length > 0) {
       currentProjectId = projects[0].id;
     }
@@ -93,8 +92,9 @@ function resetScanDisplay() {
   document.getElementById("statAvgRisk").innerText = "0.0";
   updateChart(0, 0, 0, 0);
   document.getElementById("dashboardPredictionsBody").innerHTML =
-    `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--text-muted);">No scan executed yet. Run a scan to inspect your codebase.</td></tr>`;
+    `<tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--text-muted);">No scan executed yet. Upload a ZIP or run a scan to inspect your codebase.</td></tr>`;
   document.getElementById("btnExportCsv").style.display = "none";
+  document.getElementById("btnDownloadCorrectedZip").style.display = "none";
 }
 
 async function loadProjectsTable() {
@@ -105,7 +105,7 @@ async function loadProjectsTable() {
     const tbody = document.getElementById("projectsTableBody");
 
     if (projects.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No projects found. Click "+ Add Project" to configure one.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No projects found. Click "+ Upload ZIP" to get started.</td></tr>`;
       return;
     }
 
@@ -117,7 +117,7 @@ async function loadProjectsTable() {
         <td>${p.fileCount || 0}</td>
         <td><span class="badge badge-low">Ready</span></td>
         <td>
-          <button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="triggerScan(${p.id})">Scan Now</button>
+          <button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="triggerScan(${p.id})">Scan & Correct</button>
         </td>
       </tr>
     `).join("");
@@ -151,7 +151,9 @@ async function loadScansList() {
         <td><span class="badge ${s.status === 'COMPLETED' ? 'badge-low' : 'badge-high'}">${s.status}</span></td>
         <td><strong>${(s.avgRiskScore || 0).toFixed(1)}</strong></td>
         <td><span style="color: var(--accent-crimson); font-weight: 700;">${(s.highRiskCount || 0) + (s.criticalRiskCount || 0)}</span></td>
-        <td><small>${s.createdAt ? s.createdAt.substring(0, 19).replace('T', ' ') : ''}</small></td>
+        <td>
+          <button class="btn-primary" style="padding: 3px 8px; font-size: 11px;" onclick="window.location.href='/api/reports/scan/${s.id}/download-corrected-zip'">⬇️ ZIP</button>
+        </td>
       </tr>
     `).join("");
   } catch (err) {
@@ -172,7 +174,10 @@ async function loadProjectScans(projectId) {
       document.getElementById("statHighRisk").innerText = (latestScan.highRiskCount || 0) + (latestScan.criticalRiskCount || 0);
       document.getElementById("statAvgRisk").innerText = (latestScan.avgRiskScore || 0).toFixed(1);
       document.getElementById("scanStatusBadge").innerHTML =
-        `<strong>Latest Scan #${latestScan.id}</strong>: ${latestScan.status} (${latestScan.scannedFiles} files scanned).`;
+        `<strong>Latest Scan #${latestScan.id}</strong>: ${latestScan.status} (${latestScan.scannedFiles} files scanned across any language).`;
+
+      document.getElementById("btnDownloadCorrectedZip").style.display = "inline-block";
+      document.getElementById("btnExportCsv").style.display = "inline-block";
 
       updateChart(latestScan.lowRiskCount || 0, latestScan.mediumRiskCount || 0, latestScan.highRiskCount || 0, latestScan.criticalRiskCount || 0);
       loadPredictions(latestScan.id);
@@ -197,7 +202,6 @@ async function loadPredictions(scanId) {
 
 function renderPredictionsTable(predictions) {
   const tbody = document.getElementById("dashboardPredictionsBody");
-  document.getElementById("btnExportCsv").style.display = predictions.length > 0 ? "inline-block" : "none";
 
   if (predictions.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No predictions for this scan.</td></tr>`;
@@ -213,10 +217,10 @@ function renderPredictionsTable(predictions) {
     return `
       <tr>
         <td><strong>${escapeHtml(p.projectFile.fileName)}</strong></td>
-        <td><small>${escapeHtml(p.projectFile.relativePath)}</small></td>
+        <td><small><span class="badge badge-low">${escapeHtml(p.projectFile.packageName || "Source")}</span> ${escapeHtml(p.projectFile.relativePath)}</small></td>
         <td><strong>${p.riskScore.toFixed(1)}</strong></td>
         <td><span class="badge ${badgeClass}">${p.riskCategory}</span></td>
-        <td><small>${escapeHtml(p.explanation)}</small></td>
+        <td><small style="color: #4A5568;">${escapeHtml(p.explanation)}</small></td>
         <td>
           <button class="btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="createRemediationTask('${escapeHtml(p.projectFile.fileName)}', '${escapeHtml(p.explanation)}')">Remediate</button>
         </td>
@@ -288,7 +292,7 @@ async function triggerScan(projectId) {
       const data = await res.json();
       currentActiveScanId = data.scanId;
       currentProjectId = projectId;
-      document.getElementById("scanStatusBadge").innerHTML = `<em>Scan #${data.scanId} running in background...</em>`;
+      document.getElementById("scanStatusBadge").innerHTML = `<em>Scan #${data.scanId} running in background & auto-correcting code...</em>`;
       pollScanProgress(data.scanId);
     }
   } catch (err) {
@@ -305,12 +309,62 @@ async function pollScanProgress(scanId) {
       if (scan.status === "COMPLETED" || scan.status === "FAILED") {
         clearInterval(interval);
         loadProjectScans(scan.project.id);
-        alert(`Scan completed for ${scan.project.name}! Scanned ${scan.scannedFiles} Java files.`);
+        alert(`Scan completed for ${scan.project.name}! Scanned and corrected ${scan.scannedFiles} code files.`);
       }
     } catch (err) {
       clearInterval(interval);
     }
   }, 1500);
+}
+
+function openUploadZipModal() {
+  document.getElementById("zipFileInput").click();
+}
+
+async function handleZipUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const projectName = prompt("Enter project name for uploaded archive:", file.name.replace(/\.[^/.]+$/, ""));
+  if (!projectName) return;
+
+  const formData = new FormData();
+  formData.append("name", projectName);
+  formData.append("file", file);
+
+  document.getElementById("scanStatusBadge").innerHTML = `<em>Uploading and extracting ${file.name}...</em>`;
+
+  try {
+    const res = await fetch("/api/projects/upload-zip", {
+      method: "POST",
+      body: formData
+    });
+    if (res.ok) {
+      const p = await res.json();
+      alert(`Project "${p.name}" uploaded successfully! Starting scan and bug detection...`);
+      currentProjectId = p.id;
+      triggerScan(p.id);
+    } else {
+      const err = await res.json();
+      alert("Upload failed: " + (err.error || "Unknown error"));
+    }
+  } catch (e) {
+    alert("Upload error: " + e.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function downloadCorrectedZip() {
+  if (currentActiveScanId) {
+    window.location.href = `/api/reports/scan/${currentActiveScanId}/download-corrected-zip`;
+  }
+}
+
+function exportCsvReport() {
+  if (currentActiveScanId) {
+    window.location.href = `/api/reports/scan/${currentActiveScanId}/csv`;
+  }
 }
 
 async function loadRemediationTasks() {
@@ -376,26 +430,20 @@ function createRemediationTask(fileName, explanation) {
 }
 
 function openNewProjectModal() {
-  const name = prompt("Project Name:", "My Java Project");
+  const name = prompt("Project Name:", "My Codebase");
   if (!name) return;
-  const path = prompt("Absolute Java Source Directory:", "C:\\Users\\WINDOWS\\.gemini\antigravity\\scratch\\bugpredict-ai\\src\\main\\java");
+  const path = prompt("Absolute Source Directory:", "C:\\Users\\WINDOWS\\.gemini\\antigravity\\scratch\\bugpredict-ai\\src\\main\\java");
   if (!path) return;
 
   fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name, description: "Java repository", sourcePath: path })
+    body: JSON.stringify({ name: name, description: "Source repository", sourcePath: path })
   }).then(r => r.json()).then(p => {
     alert("Project created: " + p.name);
     currentProjectId = p.id;
     loadDashboard();
   });
-}
-
-function exportCsvReport() {
-  if (currentActiveScanId) {
-    window.location.href = `/api/reports/scan/${currentActiveScanId}/csv`;
-  }
 }
 
 function escapeHtml(str) {
