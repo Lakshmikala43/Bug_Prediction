@@ -80,7 +80,7 @@ async function loadDetectedBugs(scanId) {
     document.getElementById("resScannedFiles").innerText = data.scannedFiles;
     document.getElementById("resTotalBugs").innerText = data.totalBugs;
     document.getElementById("resAvgRisk").innerText = (data.avgRiskScore || 0).toFixed(1);
-    document.getElementById("bugsDetectedTitle").innerText = `Found ${data.totalBugs} Error(s) Across ${data.scannedFiles} File(s)`;
+    document.getElementById("bugsDetectedTitle").innerText = `Found ${data.totalBugs} Bug(s) Across ${data.scannedFiles} File(s)`;
 
     const container = document.getElementById("bugDetailsList");
     container.innerHTML = "";
@@ -89,52 +89,77 @@ async function loadDetectedBugs(scanId) {
       container.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-muted);">No source files found in this archive.</div>`;
     } else {
       data.files.forEach(file => {
-        let badgeClass = "badge-low";
-        if (file.riskCategory === "CRITICAL") badgeClass = "badge-critical";
-        else if (file.riskCategory === "HIGH") badgeClass = "badge-high";
-        else if (file.riskCategory === "MEDIUM") badgeClass = "badge-medium";
+        const hasBugs = file.bugs && file.bugs.length > 0;
 
         let bugItemsHtml = "";
-        if (file.bugs.length === 0) {
-          bugItemsHtml = `<div style="color: var(--accent-sage); font-size: 13px; margin-top: 8px;">✓ Clean file — 0 bugs detected.</div>`;
-        } else {
-          bugItemsHtml = file.bugs.map((b, idx) => `
-            <div class="bug-card">
-              <div style="display:flex; justify-content: space-between; align-items:center;">
-                <strong>Bug #${idx + 1}: ${escapeHtml(b.ruleName)} (Line ${b.lineNumber})</strong>
-                <span class="badge ${b.severity === 'CRITICAL' ? 'badge-critical' : 'badge-high'}">${b.severity}</span>
-              </div>
-              <p style="font-size: 13.5px; color: var(--text-main); margin-top: 6px;">${escapeHtml(b.message)}</p>
-              <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;"><strong>Proposed Fix:</strong> ${escapeHtml(b.recommendation)}</div>
-
-              <div class="code-snippet">
-                <div class="diff-before">❌ Original Line: ${escapeHtml(b.originalSnippet)}</div>
-                <div class="diff-after">✅ Fixed Patch:  ${escapeHtml(b.suggestedPatch)}</div>
-              </div>
+        if (!hasBugs) {
+          bugItemsHtml = `
+            <div style="padding: 16px 20px; color: var(--accent-sage); font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+              <span>✅</span> Clean File — 0 defects or bugs detected.
             </div>
-          `).join("");
+          `;
+        } else {
+          bugItemsHtml = file.bugs.map((b, idx) => {
+            const severityBadge = (b.severity === 'CRITICAL') ? 'badge-critical' : 'badge-high';
+
+            return `
+              <div class="bug-item-row">
+                <div class="bug-header-line">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="line-indicator">LINE ${b.lineNumber}</span>
+                    <span class="bug-type-tag">Bug #${idx + 1}: ${escapeHtml(formatBugTitle(b.ruleName))}</span>
+                  </div>
+                  <span class="badge ${severityBadge}">${b.severity}</span>
+                </div>
+
+                <div class="bug-desc-text">
+                  <strong>Issue:</strong> ${escapeHtml(b.message)}
+                </div>
+
+                <div class="bug-fix-hint">
+                  <strong>Recommended Fix:</strong> ${escapeHtml(b.recommendation)}
+                </div>
+
+                <table class="code-diff-table">
+                  <tr class="diff-row-bad">
+                    <td style="width: 30px; font-weight: bold; text-align: center;">-</td>
+                    <td><strong>Detected Bug:</strong> ${escapeHtml(b.originalSnippet)}</td>
+                  </tr>
+                  <tr class="diff-row-good">
+                    <td style="width: 30px; font-weight: bold; text-align: center;">+</td>
+                    <td><strong>Automated Patch:</strong> ${escapeHtml(b.suggestedPatch)}</td>
+                  </tr>
+                </table>
+              </div>
+            `;
+          }).join("");
         }
 
         const fileBlock = document.createElement("div");
-        fileBlock.style.border = "1px solid var(--border-subtle)";
-        fileBlock.style.borderRadius = "8px";
-        fileBlock.style.padding = "16px";
-        fileBlock.style.marginBottom = "16px";
-        fileBlock.style.background = "#fff";
+        fileBlock.className = "file-card-box";
+
+        let riskBadge = "badge-low";
+        if (file.riskCategory === "CRITICAL") riskBadge = "badge-critical";
+        else if (file.riskCategory === "HIGH") riskBadge = "badge-high";
+        else if (file.riskCategory === "MEDIUM") riskBadge = "badge-medium";
 
         fileBlock.innerHTML = `
-          <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+          <div class="file-card-header">
             <div>
               <span class="badge badge-low">${escapeHtml(file.language || "Code")}</span>
-              <strong style="margin-left: 8px; font-size: 14.5px;">${escapeHtml(file.fileName)}</strong>
-              <small style="color: var(--text-muted); margin-left: 8px;">${escapeHtml(file.relativePath)}</small>
+              <span class="file-name-title" style="margin-left: 8px;">📄 ${escapeHtml(file.fileName)}</span>
+              <span class="file-path-sub">${escapeHtml(file.relativePath)}</span>
             </div>
-            <div>
-              <span style="font-size: 12px; color: var(--text-muted); margin-right: 6px;">Risk: <strong>${file.riskScore.toFixed(1)}</strong></span>
-              <span class="badge ${badgeClass}">${file.riskCategory}</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="bug-counter-pill ${hasBugs ? 'bug-counter-has-bugs' : 'bug-counter-clean'}">
+                ${hasBugs ? '⚠️ ' + file.bugs.length + ' Bug(s) Detected' : '✅ 0 Bugs'}
+              </span>
+              <span class="badge ${riskBadge}">${file.riskCategory} RISK</span>
             </div>
           </div>
-          ${bugItemsHtml}
+          <div>
+            ${bugItemsHtml}
+          </div>
         `;
         container.appendChild(fileBlock);
       });
@@ -144,6 +169,11 @@ async function loadDetectedBugs(scanId) {
   } catch (err) {
     alert("Error loading scan details: " + err.message);
   }
+}
+
+function formatBugTitle(ruleName) {
+  if (!ruleName) return "Defect";
+  return ruleName.replace(/_/g, " ");
 }
 
 async function triggerBugCorrection() {
