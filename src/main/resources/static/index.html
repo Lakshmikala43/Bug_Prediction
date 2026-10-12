@@ -3,213 +3,138 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BugPredict AI — Predict Bugs Before Deployment</title>
+  <title>BugPredict AI — Predict & Auto-Correct Bugs</title>
   <link rel="stylesheet" href="/css/main.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="sidebar">
-    <div class="brand">
-      <div class="brand-icon">BP</div>
-      <div class="brand-text">
+  <header>
+    <div class="brand-wrapper">
+      <div class="brand-badge">BP</div>
+      <div class="brand-title">
         <h1>BugPredict AI</h1>
-        <p>Defect Risk Intelligence</p>
+        <p>Universal Code Risk Scanner & Automated Bug Correction</p>
       </div>
     </div>
-    <ul class="nav-menu">
-      <li class="nav-item active" id="nav-dashboard"><button onclick="switchView('dashboard')"><span>📊</span> Dashboard</button></li>
-      <li class="nav-item" id="nav-projects"><button onclick="switchView('projects')"><span>📁</span> Projects</button></li>
-      <li class="nav-item" id="nav-scans"><button onclick="switchView('scans')"><span>🔍</span> Code Scans</button></li>
-      <li class="nav-item" id="nav-predictions"><button onclick="switchView('predictions')"><span>🎯</span> Defect Predictions</button></li>
-      <li class="nav-item" id="nav-remediation"><button onclick="switchView('remediation')"><span>🛠️</span> Remediation Tasks</button></li>
-    </ul>
-  </div>
+    <div style="font-size: 13px; color: var(--text-muted);">
+      Zero External API Keys • Runs Locally
+    </div>
+  </header>
 
-  <div class="main-wrapper">
-    <header>
-      <div class="page-title" id="pageTitle">Risk Overview</div>
-      <div class="header-actions" style="display:flex; gap:10px;">
-        <button class="btn-primary" onclick="openUploadZipModal()">📦 Upload ZIP Project</button>
-        <button class="btn-secondary" onclick="openNewProjectModal()">📁 Local Directory</button>
-      </div>
-    </header>
-
-    <div class="content-container">
-      <!-- VIEW: DASHBOARD -->
-      <div id="view-dashboard" class="tab-view">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total Projects</div>
-            <div class="stat-value" id="statProjects">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Files Scanned (Current)</div>
-            <div class="stat-value" id="statFiles">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">High / Critical Risk</div>
-            <div class="stat-value" style="color: var(--accent-crimson)" id="statHighRisk">0</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Average Risk Score</div>
-            <div class="stat-value" style="color: var(--accent-amber)" id="statAvgRisk">0.0</div>
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
-          <div class="stat-card">
-            <h4 style="margin-bottom: 12px; color: var(--text-main);">Risk Distribution Across Scanned Files</h4>
-            <div style="height: 220px; position: relative;">
-              <canvas id="riskDistributionChart"></canvas>
-            </div>
-          </div>
-          <div class="stat-card">
-            <h4 style="margin-bottom: 12px; color: var(--text-main);">Scan Status & Downloads</h4>
-            <div id="scanStatusBadge" style="padding: 12px; background: #FAF8F5; border-radius: 6px; border: 1px solid var(--border-subtle); margin-top: 14px; font-size: 13.5px;">
-              Ready for scanning. No previous runs cached.
-            </div>
-            <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-              <button id="btnDownloadCorrectedZip" class="btn-primary" onclick="downloadCorrectedZip()" style="display:none; width: 100%; text-align: center;">
-                ⬇️ Download Auto-Corrected ZIP
-              </button>
-              <button id="btnExportCsv" class="btn-secondary" onclick="exportCsvReport()" style="display:none; width: 100%;">
-                📄 Download CSV Report
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-table">
-          <div class="table-header">
-            <h3>Active Scanned Files & Detected Bugs</h3>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>File Name</th>
-                <th>Language / Path</th>
-                <th>Risk Score</th>
-                <th>Category</th>
-                <th>Contributing Factors & Bugs</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="dashboardPredictionsBody">
-              <tr><td colspan="6" style="text-align:center; padding: 30px; color: var(--text-muted);">No scan executed yet. Upload a ZIP or register a project to see your results.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- VIEW: PROJECTS -->
-      <div id="view-projects" class="tab-view" style="display:none;">
-        <div class="card-table">
-          <div class="table-header">
-            <h3>Registered Projects & Codebases</h3>
-            <button class="btn-primary" onclick="openUploadZipModal()">+ Upload ZIP</button>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Project Name</th>
-                <th>Language / Source Directory</th>
-                <th>Files</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="projectsTableBody">
-              <tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No projects yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- VIEW: SCANS -->
-      <div id="view-scans" class="tab-view" style="display:none;">
-        <div class="card-table">
-          <div class="table-header">
-            <h3>Scan Runs</h3>
-            <button class="btn-secondary" onclick="loadScansList()">Refresh</button>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Scan ID</th>
-                <th>Project</th>
-                <th>Files Scanned</th>
-                <th>Status</th>
-                <th>Avg Risk</th>
-                <th>High / Critical</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="scansTableBody">
-              <tr><td colspan="7" style="text-align:center; padding: 25px; color: var(--text-muted);">No scans run yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- VIEW: PREDICTIONS -->
-      <div id="view-predictions" class="tab-view" style="display:none;">
-        <div class="card-table">
-          <div class="table-header">
-            <h3>All Code Defect Risk Predictions</h3>
-            <div>
-              <input type="text" id="filterInput" placeholder="Filter file name..." onkeyup="filterPredictions()" style="padding: 6px 10px; border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 13px;">
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>File Name</th>
-                <th>Path</th>
-                <th>Risk Score</th>
-                <th>Category</th>
-                <th>Confidence</th>
-                <th>Risk & Bug Explanations</th>
-                <th>Remediation</th>
-              </tr>
-            </thead>
-            <tbody id="allPredictionsBody">
-              <tr><td colspan="7" style="text-align:center; padding: 25px; color: var(--text-muted);">Scan a project to populate predictions.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- VIEW: REMEDIATION -->
-      <div id="view-remediation" class="tab-view" style="display:none;">
-        <div class="card-table">
-          <div class="table-header">
-            <h3>Remediation Tasks</h3>
-            <button class="btn-secondary" onclick="loadRemediationTasks()">Refresh Tasks</button>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Task ID</th>
-                <th>Title</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Action Recommended</th>
-                <th>Change Status</th>
-              </tr>
-            </thead>
-            <tbody id="remediationTableBody">
-              <tr><td colspan="6" style="text-align:center; padding: 25px; color: var(--text-muted);">No remediation tasks created yet. Click "Remediate" on any file finding to add one.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+  <!-- Step Tracker -->
+  <div class="stepper-container">
+    <div class="step-item active" id="indicator-step-1">
+      <div class="step-num">1</div>
+      <span>Upload ZIP Project</span>
+    </div>
+    <div class="step-item" id="indicator-step-2">
+      <div class="step-num">2</div>
+      <span>Scan & Detect</span>
+    </div>
+    <div class="step-item" id="indicator-step-3">
+      <div class="step-num">3</div>
+      <span>Review & Correct Bugs</span>
+    </div>
+    <div class="step-item" id="indicator-step-4">
+      <div class="step-num">4</div>
+      <span>Download Corrected ZIP</span>
     </div>
   </div>
 
-  <!-- ZIP Upload Hidden Form -->
-  <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="handleZipUpload(event)">
+  <main class="main-content">
+    <!-- STEP 1: UPLOAD -->
+    <div id="step-1" class="card">
+      <h2 style="margin-bottom: 8px;">Step 1: Upload Your Project ZIP Archive</h2>
+      <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 14px;">
+        Upload a ZIP archive containing any codebase (Java, Python, JS, C++, Go, PHP, etc.). BugPredict AI will inspect every file, detect all bugs, and generate an auto-corrected ZIP archive.
+      </p>
+
+      <div class="drop-zone" onclick="document.getElementById('zipFileInput').click()">
+        <div style="font-size: 40px; margin-bottom: 12px;">📦</div>
+        <h3 id="uploadPromptText">Click here to browse and select a project .ZIP file</h3>
+        <p style="color: var(--text-muted); font-size: 13px; margin-top: 6px;">Supported: .zip containing Java, Python, JavaScript, TypeScript, C/C++, C#, Go, SQL</p>
+      </div>
+
+      <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="onFileSelected(event)">
+
+      <div id="fileSelectedBar" style="display:none; margin-top: 20px; padding: 14px; background: #FAF8F5; border: 1px solid var(--border-subtle); border-radius: 6px; justify-content: space-between; align-items: center;">
+        <div>
+          <strong id="selectedFileName">project.zip</strong>
+          <span id="selectedFileSize" style="color: var(--text-muted); font-size: 12px; margin-left: 8px;"></span>
+        </div>
+        <button class="btn-primary" onclick="startUploadAndScan()">Proceed to Scan ➔</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: SCANNING PROGRESS -->
+    <div id="step-2" class="card" style="display:none; text-align: center; padding: 60px 20px;">
+      <div style="font-size: 44px; margin-bottom: 16px;">🔍</div>
+      <h2>Scanning and Analyzing Project Files...</h2>
+      <p style="color: var(--text-muted); margin-top: 8px; font-size: 14.5px;" id="scanStatusMsg">
+        Unpacking archive safely, computing AST complexity, and running rule-based bug detection...
+      </p>
+      <div style="width: 280px; height: 6px; background: #E8E5DF; border-radius: 4px; margin: 24px auto 0; overflow: hidden;">
+        <div style="width: 60%; height: 100%; background: var(--accent-terracotta); animation: pulse 1.5s infinite;"></div>
+      </div>
+    </div>
+
+    <!-- STEP 3 & 4: DETECTED BUGS, AUTO-CORRECTIONS & CLEAN ZIP -->
+    <div id="step-3" style="display:none;">
+      <!-- Download Clean ZIP Hero Banner -->
+      <div class="card" style="background: #F4FAF6; border: 2px solid var(--accent-sage); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 24px;">🎉</span>
+            <h3 style="color: var(--text-main);">Scan Complete — All Bugs Have Been Auto-Corrected!</h3>
+          </div>
+          <p style="color: var(--text-muted); font-size: 13.5px; margin-top: 4px;" id="cleanZipSummary">
+            Your codebase was scanned and fixed. You can download the bug-free ZIP archive right now.
+          </p>
+        </div>
+        <div>
+          <button class="btn-success" id="btnDownloadCleanZip" onclick="downloadCleanZip()">
+            ⬇️ Download Corrected ZIP (0 Bugs)
+          </button>
+        </div>
+      </div>
+
+      <!-- Scan Statistics Header -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Scanned Files</div>
+          <div style="font-size: 26px; font-weight: 700; margin-top: 4px;" id="resScannedFiles">0</div>
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Total Detected Bugs</div>
+          <div style="font-size: 26px; font-weight: 700; color: var(--accent-crimson); margin-top: 4px;" id="resTotalBugs">0</div>
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Bugs Corrected</div>
+          <div style="font-size: 26px; font-weight: 700; color: var(--accent-sage); margin-top: 4px;" id="resBugsCorrected">0</div>
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Avg Codebase Risk</div>
+          <div style="font-size: 26px; font-weight: 700; color: var(--accent-amber); margin-top: 4px;" id="resAvgRisk">0.0</div>
+        </div>
+      </div>
+
+      <!-- Detected Errors & Corrected Patches List -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+          <div>
+            <h3>Detected Errors & Applied Corrections</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+              Review each file's detected bug, root cause explanation, and the automatic patch applied in the corrected ZIP.
+            </p>
+          </div>
+          <button class="btn-secondary" onclick="resetToUpload()">+ Scan Another Project</button>
+        </div>
+
+        <div id="bugDetailsList">
+          <!-- Dynamically populated files and bug diffs -->
+        </div>
+      </div>
+    </div>
+  </main>
 
   <script src="/js/app.js"></script>
 </body>
