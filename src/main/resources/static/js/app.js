@@ -14,7 +14,7 @@ async function loadDashboard() {
 
     const tbody = document.getElementById("projectsTableBody");
     if (projects.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No projects yet. Click "+ New Project" or "Upload ZIP" to get started.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No projects yet. Click "+ New Project" to get started.</td></tr>`;
       return;
     }
 
@@ -42,13 +42,12 @@ async function loadDashboard() {
 
 async function triggerScan(projectId) {
   try {
-    const res = await fetch(`/api/scans/project/${projectId}/start-sync`, { method: "POST" });
+    const res = await fetch(`/api/scans/project/${projectId}/start`, { method: "POST" });
     if (res.ok) {
       const data = await res.json();
       currentActiveScanId = data.scanId;
-      currentProjectId = projectId;
-      alert(`Scan completed successfully!`);
-      loadProjectScans(projectId);
+      alert(`Scan #${data.scanId} started successfully.`);
+      pollScanProgress(data.scanId);
     } else {
       alert("Failed to start scan");
     }
@@ -69,10 +68,6 @@ async function loadProjectScans(projectId) {
       document.getElementById("statFiles").innerText = latestScan.scannedFiles || 0;
       document.getElementById("statHighRisk").innerText = (latestScan.highRiskCount || 0) + (latestScan.criticalRiskCount || 0);
       document.getElementById("statAvgRisk").innerText = (latestScan.avgRiskScore || 0).toFixed(1);
-
-      const zipBtn = document.getElementById("btnDownloadCorrectedZip");
-      if (zipBtn) zipBtn.style.display = "inline-block";
-
       loadPredictions(latestScan.id);
     }
   } catch (err) {
@@ -82,42 +77,32 @@ async function loadProjectScans(projectId) {
 
 async function loadPredictions(scanId) {
   try {
-    const res = await fetch(`/api/workflow/scan/${scanId}/details`);
+    const res = await fetch(`/api/analysis/scan/${scanId}/predictions`);
     if (!res.ok) return;
-    const data = await res.json();
+    const predictions = await res.json();
     const tbody = document.getElementById("predictionsTableBody");
-    document.getElementById("btnExportCsv").style.display = data.files.length > 0 ? "inline-block" : "none";
+    document.getElementById("btnExportCsv").style.display = predictions.length > 0 ? "inline-block" : "none";
 
-    const correctBtn = document.getElementById("btnCorrectBugsHeader");
-    if (correctBtn) correctBtn.style.display = data.files.length > 0 ? "inline-block" : "none";
-
-    if (data.files.length === 0) {
+    if (predictions.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No predictions available for this scan.</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = data.files.map(p => {
+    tbody.innerHTML = predictions.map(p => {
       let badgeClass = "badge-low";
       if (p.riskCategory === "CRITICAL") badgeClass = "badge-critical";
       else if (p.riskCategory === "HIGH") badgeClass = "badge-high";
       else if (p.riskCategory === "MEDIUM") badgeClass = "badge-medium";
 
-      let bugsText = "";
-      if (p.bugs && p.bugs.length > 0) {
-        bugsText = p.bugs.map((b, i) => `<div style="margin-bottom:4px;"><strong>Line ${b.lineNumber}</strong>: <span style="color:#C5221F;">${escapeHtml(b.ruleName)}</span> — ${escapeHtml(b.message)}</div>`).join("");
-      } else {
-        bugsText = `<span style="color:#137333;">✓ 0 bugs detected</span>`;
-      }
-
       return `
         <tr>
-          <td><strong>${escapeHtml(p.fileName)}</strong></td>
-          <td><small>${escapeHtml(p.relativePath)}</small></td>
+          <td><strong>${escapeHtml(p.projectFile.fileName)}</strong></td>
+          <td><small>${escapeHtml(p.projectFile.relativePath)}</small></td>
           <td><strong>${p.riskScore.toFixed(1)}</strong></td>
           <td><span class="badge ${badgeClass}">${p.riskCategory}</span></td>
-          <td><small>${bugsText}</small></td>
+          <td><small>${escapeHtml(p.explanation)}</small></td>
           <td>
-            <button class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="createRemediationTask('${escapeHtml(p.fileName)}', '${escapeHtml(p.language)}')">Remediate</button>
+            <button class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="createRemediationTask('${escapeHtml(p.projectFile.fileName)}', '${escapeHtml(p.explanation)}')">Remediate</button>
           </td>
         </tr>
       `;
@@ -127,38 +112,21 @@ async function loadPredictions(scanId) {
   }
 }
 
-async function triggerCorrection() {
-  if (!currentActiveScanId) return;
-  const btn = document.getElementById("btnCorrectBugsHeader");
-  if (btn) {
-    btn.disabled = true;
-    btn.innerText = "Applying Patches...";
-  }
-
-  try {
-    const res = await fetch(`/api/workflow/scan/${currentActiveScanId}/apply-corrections`, { method: "POST" });
-    if (res.ok) {
-      const data = await res.json();
-      alert(`Successfully corrected ${data.correctedBugsCount} bugs! Clean ZIP is ready.`);
-      const zipBtn = document.getElementById("btnDownloadCorrectedZip");
-      if (zipBtn) zipBtn.style.display = "inline-block";
-    } else {
-      alert("Failed to apply corrections");
+async function pollScanProgress(scanId) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/scans/${scanId}`);
+      if (!res.ok) return;
+      const scan = await res.json();
+      if (scan.status === "COMPLETED" || scan.status === "FAILED") {
+        clearInterval(interval);
+        loadDashboard();
+        if (currentProjectId) loadProjectScans(currentProjectId);
+      }
+    } catch (err) {
+      clearInterval(interval);
     }
-  } catch (err) {
-    alert("Error: " + err.message);
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerText = "✨ Correct Bugs";
-    }
-  }
-}
-
-function downloadCorrectedZip() {
-  if (currentActiveScanId) {
-    window.location.href = `/api/reports/scan/${currentActiveScanId}/download-corrected-zip`;
-  }
+  }, 2000);
 }
 
 function exportCsvReport() {
@@ -168,66 +136,29 @@ function exportCsvReport() {
 }
 
 function openNewProjectModal() {
-  const name = prompt("Enter project name:", "BugPredict Codebase");
+  const name = prompt("Enter project name:", "BugPredict Internal");
   if (!name) return;
-  const path = prompt("Enter local source directory path:", "C:\\Users\\WINDOWS\\.gemini\\antigravity\\scratch\\bugpredict-ai\\src\\main\\java");
+  const path = prompt("Enter local Java source directory path:", window.location.origin.includes("localhost") ? "C:\\Users\\WINDOWS\\.gemini\\antigravity\\scratch\\bugpredict-ai\\src\\main\\java" : "");
   if (!path) return;
 
   fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name, description: "Source repository", sourcePath: path })
+    body: JSON.stringify({ name: name, description: "Java source repository", sourcePath: path })
   }).then(r => r.json()).then(p => {
     alert("Project created: " + p.name);
     loadDashboard();
   });
 }
 
-function openUploadZipModal() {
-  document.getElementById("zipFileInput").click();
-}
-
-async function handleZipUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const projectName = prompt("Enter project name for uploaded archive:", file.name.replace(/\.[^/.]+$/, ""));
-  if (!projectName) return;
-
-  const formData = new FormData();
-  formData.append("name", projectName);
-  formData.append("file", file);
-
-  try {
-    const res = await fetch("/api/projects/upload-zip", {
-      method: "POST",
-      body: formData
-    });
-    if (res.ok) {
-      const p = await res.json();
-      alert(`Project "${p.name}" uploaded successfully! Scanning now...`);
-      currentProjectId = p.id;
-      loadDashboard();
-      triggerScan(p.id);
-    } else {
-      const err = await res.json();
-      alert("Upload failed: " + (err.error || "Unknown error"));
-    }
-  } catch (e) {
-    alert("Upload error: " + e.message);
-  } finally {
-    event.target.value = "";
-  }
-}
-
-function createRemediationTask(fileName, lang) {
+function createRemediationTask(fileName, explanation) {
   if (!currentProjectId) return;
   fetch(`/api/remediation/project/${currentProjectId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       title: "Investigate defect risk in " + fileName,
-      description: "Code analysis finding for " + lang,
+      description: explanation,
       recommendation: "Refactor complex branching, isolate monolithic methods, and add regression unit tests."
     })
   }).then(r => r.json()).then(t => {
