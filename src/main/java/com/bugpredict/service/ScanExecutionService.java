@@ -58,7 +58,8 @@ public class ScanExecutionService {
     }
 
     private static final Set<String> IGNORED_DIRS = Set.of(
-            "node_modules", ".git", ".github", "target", "build", "dist", ".next", ".cache", "vendor", ".idea", ".vscode", "obj", "bin"
+            "node_modules", ".git", ".github", "target", "build", "dist", ".next", ".cache", "vendor",
+            ".idea", ".vscode", "obj", "bin", "__pycache__", ".venv", "venv", "env", "coverage", ".turbo", ".nuxt"
     );
 
     private static class ProcessedFileResult {
@@ -71,6 +72,10 @@ public class ScanExecutionService {
 
     @Async
     public void executeScanAsync(Long scanId) {
+        executeScanSync(scanId);
+    }
+
+    public void executeScanSync(Long scanId) {
         Scan scan = scanRepository.findById(scanId).orElse(null);
         if (scan == null) return;
 

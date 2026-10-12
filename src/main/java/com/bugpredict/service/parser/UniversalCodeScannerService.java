@@ -72,9 +72,26 @@ public class UniversalCodeScannerService {
                lower.endsWith(".rb") || lower.endsWith(".rs") || lower.endsWith(".sql");
     }
 
+    private static final Pattern BRANCH_PATTERN = Pattern.compile("\\b(if|for|while|case|catch|elif|except|switch)\\b");
+    private static final Pattern YODA_PATTERN = Pattern.compile("([a-zA-Z0-9_]+)\\.equals\\((\"[^\"]+\")\\)");
+    private static final Pattern CATCH_EMPTY_PATTERN = Pattern.compile("catch\\s*\\([^)]+\\)\\s*\\{\\s*\\}");
+    private static final Pattern PYTHON_MUTABLE_ARG_PATTERN = Pattern.compile("def\\s+[a-zA-Z0-9_]+\\([^)]*=\\s*\\[\\]");
+    private static final Pattern SQL_KEYWORD_PATTERN = Pattern.compile("(?i)(SELECT|INSERT|UPDATE|DELETE)");
+
     public CodeAnalysisResult analyzeAndAutoCorrect(File file) {
         CodeAnalysisResult result = new CodeAnalysisResult();
         result.language = detectLanguage(file.getName());
+
+        // Fast guard: Skip minified bundle files (.min.js, bundle.js, etc.) or massive compiled chunks
+        String fileNameLower = file.getName().toLowerCase();
+        if (fileNameLower.endsWith(".min.js") || fileNameLower.endsWith(".min.css") || fileNameLower.contains(".bundle.") || fileNameLower.contains(".chunk.")) {
+            return result;
+        }
+
+        // Fast guard: Don't read files larger than 2MB as source code
+        if (file.length() > 2 * 1024 * 1024) {
+            return result;
+        }
 
         List<String> lines;
         try {
@@ -93,10 +110,6 @@ public class UniversalCodeScannerService {
         int complexity = 1;
         int maxNesting = 0;
         int currentNesting = 0;
-        int currentMethodLength = 0;
-        int maxMethodLen = 0;
-
-        Pattern branchPattern = Pattern.compile("\\b(if|for|while|case|catch|elif|except|switch)\\b");
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
@@ -108,7 +121,7 @@ public class UniversalCodeScannerService {
             }
             result.sloc++;
 
-            if (branchPattern.matcher(trimmed).find()) {
+            if (BRANCH_PATTERN.matcher(trimmed).find()) {
                 complexity++;
             }
 
@@ -120,20 +133,20 @@ public class UniversalCodeScannerService {
             if (currentNesting <= 0) currentNesting = 0;
 
             // Bug Pattern 1: Null Pointer / Undefined check omission (e.g. obj.method() without null verification)
-            if (trimmed.contains(".equals(\"") || trimmed.matches(".*[a-zA-Z0-9_]+\\.equals\\(\".*\"\\).*")) {
-                // e.g. str.equals("constant") should be "constant".equals(str) to prevent NPE
+            if (trimmed.contains(".equals(\"")) {
+                String patched = YODA_PATTERN.matcher(trimmed).replaceAll("$2.equals($1)");
                 result.detectedBugs.add(new DetectedBug(
                     lineNum, "NPE_RISK_YODA_CONDITION", "HIGH",
                     "String literal comparison on variable target creates NullPointerException risk.",
                     "Invert comparison to evaluate constant literal first.",
                     trimmed,
-                    trimmed.replaceAll("([a-zA-Z0-9_]+)\\.equals\\((\"[^\"]+\")\\)", "$2.equals($1)")
+                    patched
                 ));
-                correctedLines.set(i, line.replaceAll("([a-zA-Z0-9_]+)\\.equals\\((\"[^\"]+\")\\)", "$2.equals($1)"));
+                correctedLines.set(i, YODA_PATTERN.matcher(line).replaceAll("$2.equals($1)"));
             }
 
             // Bug Pattern 2: Empty Catch Block / Swallowed Exception
-            if (trimmed.matches(".*catch\\s*\\([^)]+\\)\\s*\\{\\s*\\}.*") || (trimmed.startsWith("catch") && trimmed.endsWith("{}"))) {
+            if (trimmed.contains("catch") && (trimmed.endsWith("{}") || CATCH_EMPTY_PATTERN.matcher(trimmed).find())) {
                 result.detectedBugs.add(new DetectedBug(
                     lineNum, "EMPTY_EXCEPTION_BLOCK", "CRITICAL",
                     "Empty catch block swallows critical execution exceptions silently.",
@@ -157,7 +170,7 @@ public class UniversalCodeScannerService {
             }
 
             // Bug Pattern 4: Python mutable default argument def foo(x=[])
-            if ("Python".equals(result.language) && trimmed.matches(".*def\\s+[a-zA-Z0-9_]+\\([^)]*=\\s*\\[\\].*")) {
+            if ("Python".equals(result.language) && trimmed.contains("def ") && trimmed.contains("=[]")) {
                 result.detectedBugs.add(new DetectedBug(
                     lineNum, "MUTABLE_DEFAULT_ARG", "HIGH",
                     "Default argument value is mutable (list/dict), which persists state across function calls.",
@@ -182,14 +195,16 @@ public class UniversalCodeScannerService {
             }
 
             // Bug Pattern 6: SQL Injection Vulnerability pattern
-            if (trimmed.matches(".*(SELECT|INSERT|UPDATE|DELETE).*\\+.*[a-zA-Z0-9_]+.*") || trimmed.contains("executeQuery(\"SELECT \" +") || trimmed.contains("query(\"SELECT \" +")) {
-                result.detectedBugs.add(new DetectedBug(
-                    lineNum, "SQL_INJECTION_VULNERABILITY", "CRITICAL",
-                    "Dynamic string concatenation inside SQL query introduces SQL Injection vulnerability.",
-                    "Use parameterized PreparedStatements or ORM bind parameters.",
-                    trimmed,
-                    "// Refactored with parameterized query\n" + trimmed
-                ));
+            if (trimmed.contains("+") && (trimmed.contains("SELECT") || trimmed.contains("INSERT") || trimmed.contains("UPDATE") || trimmed.contains("DELETE"))) {
+                if (SQL_KEYWORD_PATTERN.matcher(trimmed).find()) {
+                    result.detectedBugs.add(new DetectedBug(
+                        lineNum, "SQL_INJECTION_VULNERABILITY", "CRITICAL",
+                        "Dynamic string concatenation inside SQL query introduces SQL Injection vulnerability.",
+                        "Use parameterized PreparedStatements or ORM bind parameters.",
+                        trimmed,
+                        "// Refactored with parameterized query\n" + trimmed
+                    ));
+                }
             }
         }
 

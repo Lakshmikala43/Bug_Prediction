@@ -48,4 +48,15 @@ public class ScanController {
             return ResponseEntity.ok(Map.of("message", "Scan scheduled", "scanId", scan.getId()));
         }).orElse(ResponseEntity.notFound().build());
     }
+
+    @PostMapping("/project/{projectId}/start-sync")
+    public ResponseEntity<?> startScanSync(@PathVariable Long projectId) {
+        return projectRepository.findById(projectId).map(proj -> {
+            Scan scan = new Scan(proj);
+            scan.setCreatedAt(LocalDateTime.now());
+            scan = scanRepository.save(scan);
+            scanExecutionService.executeScanSync(scan.getId());
+            return ResponseEntity.ok(Map.of("message", "Scan completed", "scanId", scan.getId()));
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }
