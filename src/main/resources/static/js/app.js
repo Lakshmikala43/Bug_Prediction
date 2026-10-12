@@ -1,220 +1,242 @@
-﻿let selectedFile = null;
-let currentScanId = null;
+﻿let currentActiveScanId = null;
+let currentProjectId = null;
 
-function onFileSelected(event) {
-  selectedFile = event.target.files[0];
-  if (!selectedFile) return;
+document.addEventListener("DOMContentLoaded", () => {
+  loadDashboard();
+});
 
-  document.getElementById("selectedFileName").innerText = selectedFile.name;
-  document.getElementById("selectedFileSize").innerText = `(${(selectedFile.size / 1024).toFixed(1)} KB)`;
-  document.getElementById("fileSelectedBar").style.display = "flex";
-  document.getElementById("uploadPromptText").innerText = "Selected: " + selectedFile.name;
+async function loadDashboard() {
+  try {
+    const res = await fetch("/api/projects");
+    if (!res.ok) return;
+    const projects = await res.json();
+    document.getElementById("statProjects").innerText = projects.length;
+
+    const tbody = document.getElementById("projectsTableBody");
+    if (projects.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No projects yet. Click "+ New Project" or "Upload ZIP" to get started.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = projects.map(p => `
+      <tr>
+        <td>#${p.id}</td>
+        <td><strong>${escapeHtml(p.name)}</strong></td>
+        <td><code>${escapeHtml(p.sourcePath || "N/A")}</code></td>
+        <td>${p.fileCount || 0}</td>
+        <td><span class="badge badge-low">Ready</span></td>
+        <td>
+          <button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="triggerScan(${p.id})">Run Scan</button>
+          <button class="btn-secondary" style="padding: 4px 8px; font-size: 12px; margin-left: 6px;" onclick="loadProjectScans(${p.id})">Scans</button>
+        </td>
+      </tr>
+    `).join("");
+
+    if (projects.length > 0 && !currentProjectId) {
+      loadProjectScans(projects[0].id);
+    }
+  } catch (err) {
+    console.error("Failed to load dashboard data:", err);
+  }
 }
 
-async function startUploadAndScan() {
-  if (!selectedFile) {
-    alert("Please select a .zip file first.");
-    return;
-  }
-
-  setStep(2);
-
-  const formData = new FormData();
-  formData.append("name", selectedFile.name.replace(/\.[^/.]+$/, ""));
-  formData.append("file", selectedFile);
-
+async function triggerScan(projectId) {
   try {
-    document.getElementById("scanStatusMsg").innerText = `Uploading and scanning ${selectedFile.name}...`;
-    const uploadRes = await fetch("/api/projects/upload-zip", {
-      method: "POST",
-      body: formData
-    });
-
-    if (!uploadRes.ok) {
-      const err = await uploadRes.json();
-      alert("Upload failed: " + (err.error || "Unknown error"));
-      setStep(1);
-      return;
+    const res = await fetch(`/api/scans/project/${projectId}/start-sync`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      currentActiveScanId = data.scanId;
+      currentProjectId = projectId;
+      alert(`Scan completed successfully!`);
+      loadProjectScans(projectId);
+    } else {
+      alert("Failed to start scan");
     }
-
-    const project = await uploadRes.json();
-
-    document.getElementById("scanStatusMsg").innerText = `Scanning codebase and identifying bugs...`;
-    const scanRes = await fetch(`/api/scans/project/${project.id}/start-sync`, { method: "POST" });
-    if (!scanRes.ok) {
-      const err = await scanRes.json();
-      alert("Scan failed: " + (err.error || "Server error"));
-      setStep(1);
-      return;
-    }
-    const scanData = await scanRes.json();
-    currentScanId = scanData.scanId;
-
-    await loadDetectedBugs(currentScanId);
   } catch (err) {
     alert("Error: " + err.message);
-    setStep(1);
   }
 }
 
-async function loadDetectedBugs(scanId) {
+async function loadProjectScans(projectId) {
+  currentProjectId = projectId;
+  try {
+    const res = await fetch(`/api/scans/project/${projectId}`);
+    if (!res.ok) return;
+    const scans = await res.json();
+    if (scans.length > 0) {
+      const latestScan = scans[0];
+      currentActiveScanId = latestScan.id;
+      document.getElementById("statFiles").innerText = latestScan.scannedFiles || 0;
+      document.getElementById("statHighRisk").innerText = (latestScan.highRiskCount || 0) + (latestScan.criticalRiskCount || 0);
+      document.getElementById("statAvgRisk").innerText = (latestScan.avgRiskScore || 0).toFixed(1);
+
+      const zipBtn = document.getElementById("btnDownloadCorrectedZip");
+      if (zipBtn) zipBtn.style.display = "inline-block";
+
+      loadPredictions(latestScan.id);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function loadPredictions(scanId) {
   try {
     const res = await fetch(`/api/workflow/scan/${scanId}/details`);
     if (!res.ok) return;
     const data = await res.json();
+    const tbody = document.getElementById("predictionsTableBody");
+    document.getElementById("btnExportCsv").style.display = data.files.length > 0 ? "inline-block" : "none";
 
-    document.getElementById("resScannedFiles").innerText = data.scannedFiles;
-    document.getElementById("resTotalBugs").innerText = data.totalBugs;
-    document.getElementById("resAvgRisk").innerText = (data.avgRiskScore || 0).toFixed(1);
-    document.getElementById("bugsDetectedTitle").innerText = `Found ${data.totalBugs} Bug(s) Across ${data.scannedFiles} File(s)`;
-
-    const container = document.getElementById("bugDetailsList");
-    container.innerHTML = "";
+    const correctBtn = document.getElementById("btnCorrectBugsHeader");
+    if (correctBtn) correctBtn.style.display = data.files.length > 0 ? "inline-block" : "none";
 
     if (data.files.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-muted);">No source files found in this archive.</div>`;
-    } else {
-      data.files.forEach(file => {
-        const hasBugs = file.bugs && file.bugs.length > 0;
-
-        let bugItemsHtml = "";
-        if (!hasBugs) {
-          bugItemsHtml = `
-            <div style="padding: 16px 20px; color: var(--accent-sage); font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
-              <span>✅</span> Clean File — 0 defects or bugs detected.
-            </div>
-          `;
-        } else {
-          bugItemsHtml = file.bugs.map((b, idx) => {
-            const severityBadge = (b.severity === 'CRITICAL') ? 'badge-critical' : 'badge-high';
-
-            return `
-              <div class="bug-entry">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="background: #EFECE6; padding: 2px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 700; font-family: Consolas;">LINE ${b.lineNumber}</span>
-                    <strong style="color: #9C201C; font-size: 14px;">Bug #${idx + 1}: ${escapeHtml(b.ruleName.replace(/_/g, ' '))}</strong>
-                  </div>
-                  <span class="badge ${severityBadge}">${b.severity}</span>
-                </div>
-
-                <div style="font-size: 13.5px; color: #2D3748; margin-bottom: 6px;">
-                  <strong>Issue:</strong> ${escapeHtml(b.message)}
-                </div>
-
-                <div style="font-size: 13px; color: #4A5568; background: #F7FAFC; padding: 8px 12px; border-radius: 4px; border-left: 3px solid var(--accent-sage); margin-bottom: 8px;">
-                  <strong>Recommended Fix:</strong> ${escapeHtml(b.recommendation)}
-                </div>
-
-                <div class="code-box">
-                  <div class="diff-minus">❌ Original: ${escapeHtml(b.originalSnippet)}</div>
-                  <div class="diff-plus">✅ Patch:    ${escapeHtml(b.suggestedPatch)}</div>
-                </div>
-              </div>
-            `;
-          }).join("");
-        }
-
-        const fileBlock = document.createElement("div");
-        fileBlock.className = "file-box";
-
-        let riskBadge = "badge-low";
-        if (file.riskCategory === "CRITICAL") riskBadge = "badge-critical";
-        else if (file.riskCategory === "HIGH") riskBadge = "badge-high";
-        else if (file.riskCategory === "MEDIUM") riskBadge = "badge-medium";
-
-        fileBlock.innerHTML = `
-          <div class="file-box-header">
-            <div>
-              <span class="badge badge-low">${escapeHtml(file.language || "Code")}</span>
-              <strong style="margin-left: 8px; font-size: 14.5px;">📄 ${escapeHtml(file.fileName)}</strong>
-              <small style="color: var(--text-muted); margin-left: 8px; font-family: Consolas;">${escapeHtml(file.relativePath)}</small>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span class="badge ${hasBugs ? 'badge-high' : 'badge-low'}">
-                ${hasBugs ? '⚠️ ' + file.bugs.length + ' Bug(s)' : '✅ Clean'}
-              </span>
-              <span class="badge ${riskBadge}">${file.riskCategory} RISK</span>
-            </div>
-          </div>
-          <div>
-            ${bugItemsHtml}
-          </div>
-        `;
-        container.appendChild(fileBlock);
-      });
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No predictions available for this scan.</td></tr>`;
+      return;
     }
 
-    setStep(3);
+    tbody.innerHTML = data.files.map(p => {
+      let badgeClass = "badge-low";
+      if (p.riskCategory === "CRITICAL") badgeClass = "badge-critical";
+      else if (p.riskCategory === "HIGH") badgeClass = "badge-high";
+      else if (p.riskCategory === "MEDIUM") badgeClass = "badge-medium";
+
+      let bugsText = "";
+      if (p.bugs && p.bugs.length > 0) {
+        bugsText = p.bugs.map((b, i) => `<div style="margin-bottom:4px;"><strong>Line ${b.lineNumber}</strong>: <span style="color:#C5221F;">${escapeHtml(b.ruleName)}</span> — ${escapeHtml(b.message)}</div>`).join("");
+      } else {
+        bugsText = `<span style="color:#137333;">✓ 0 bugs detected</span>`;
+      }
+
+      return `
+        <tr>
+          <td><strong>${escapeHtml(p.fileName)}</strong></td>
+          <td><small>${escapeHtml(p.relativePath)}</small></td>
+          <td><strong>${p.riskScore.toFixed(1)}</strong></td>
+          <td><span class="badge ${badgeClass}">${p.riskCategory}</span></td>
+          <td><small>${bugsText}</small></td>
+          <td>
+            <button class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="createRemediationTask('${escapeHtml(p.fileName)}', '${escapeHtml(p.language)}')">Remediate</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
   } catch (err) {
-    alert("Error loading scan details: " + err.message);
+    console.error(err);
   }
 }
 
-async function triggerBugCorrection() {
-  if (!currentScanId) return;
-
-  const btn = document.getElementById("btnCorrectBugs");
-  btn.disabled = true;
-  btn.innerText = "Applying Patches & Compiling Clean ZIP...";
+async function triggerCorrection() {
+  if (!currentActiveScanId) return;
+  const btn = document.getElementById("btnCorrectBugsHeader");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "Applying Patches...";
+  }
 
   try {
-    const res = await fetch(`/api/workflow/scan/${currentScanId}/apply-corrections`, {
-      method: "POST"
-    });
-
+    const res = await fetch(`/api/workflow/scan/${currentActiveScanId}/apply-corrections`, { method: "POST" });
     if (res.ok) {
-      const result = await res.json();
-      document.getElementById("correctedZipMsg").innerText =
-        `Successfully corrected all ${result.correctedBugsCount} detected bugs! Your bug-free project is ready to download.`;
-      setStep(4);
+      const data = await res.json();
+      alert(`Successfully corrected ${data.correctedBugsCount} bugs! Clean ZIP is ready.`);
+      const zipBtn = document.getElementById("btnDownloadCorrectedZip");
+      if (zipBtn) zipBtn.style.display = "inline-block";
     } else {
-      alert("Failed to apply corrections.");
+      alert("Failed to apply corrections");
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "✨ Correct Bugs";
+    }
+  }
+}
+
+function downloadCorrectedZip() {
+  if (currentActiveScanId) {
+    window.location.href = `/api/reports/scan/${currentActiveScanId}/download-corrected-zip`;
+  }
+}
+
+function exportCsvReport() {
+  if (currentActiveScanId) {
+    window.location.href = `/api/reports/scan/${currentActiveScanId}/csv`;
+  }
+}
+
+function openNewProjectModal() {
+  const name = prompt("Enter project name:", "BugPredict Codebase");
+  if (!name) return;
+  const path = prompt("Enter local source directory path:", "C:\\Users\\WINDOWS\\.gemini\\antigravity\\scratch\\bugpredict-ai\\src\\main\\java");
+  if (!path) return;
+
+  fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name, description: "Source repository", sourcePath: path })
+  }).then(r => r.json()).then(p => {
+    alert("Project created: " + p.name);
+    loadDashboard();
+  });
+}
+
+function openUploadZipModal() {
+  document.getElementById("zipFileInput").click();
+}
+
+async function handleZipUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const projectName = prompt("Enter project name for uploaded archive:", file.name.replace(/\.[^/.]+$/, ""));
+  if (!projectName) return;
+
+  const formData = new FormData();
+  formData.append("name", projectName);
+  formData.append("file", file);
+
+  try {
+    const res = await fetch("/api/projects/upload-zip", {
+      method: "POST",
+      body: formData
+    });
+    if (res.ok) {
+      const p = await res.json();
+      alert(`Project "${p.name}" uploaded successfully! Scanning now...`);
+      currentProjectId = p.id;
+      loadDashboard();
+      triggerScan(p.id);
+    } else {
+      const err = await res.json();
+      alert("Upload failed: " + (err.error || "Unknown error"));
     }
   } catch (e) {
-    alert("Error: " + e.message);
+    alert("Upload error: " + e.message);
   } finally {
-    btn.disabled = false;
-    btn.innerText = "✨ Correct Bugs ➔";
+    event.target.value = "";
   }
 }
 
-function downloadCleanZip() {
-  if (currentScanId) {
-    const link = document.createElement("a");
-    link.href = `/api/reports/scan/${currentScanId}/download-corrected-zip`;
-    link.download = `scan-${currentScanId}-corrected-code.zip`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+function createRemediationTask(fileName, lang) {
+  if (!currentProjectId) return;
+  fetch(`/api/remediation/project/${currentProjectId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Investigate defect risk in " + fileName,
+      description: "Code analysis finding for " + lang,
+      recommendation: "Refactor complex branching, isolate monolithic methods, and add regression unit tests."
+    })
+  }).then(r => r.json()).then(t => {
+    alert("Remediation task created: " + t.title);
+  });
 }
 
-function setStep(stepNum) {
-  document.getElementById("step-1").style.display = (stepNum === 1) ? "block" : "none";
-  document.getElementById("step-2").style.display = (stepNum === 2) ? "block" : "none";
-  document.getElementById("step-3").style.display = (stepNum === 3) ? "block" : "none";
-  document.getElementById("step-4").style.display = (stepNum === 4) ? "block" : "none";
-
-  for (let i = 1; i <= 4; i++) {
-    const el = document.getElementById(`indicator-step-${i}`);
-    if (el) {
-      if (i <= stepNum) {
-        el.classList.add("active");
-      } else {
-        el.classList.remove("active");
-      }
-    }
-  }
-}
-
-function resetToUpload() {
-  selectedFile = null;
-  currentScanId = null;
-  document.getElementById("zipFileInput").value = "";
-  document.getElementById("fileSelectedBar").style.display = "none";
-  document.getElementById("uploadPromptText").innerText = "Click here to browse and select a project .ZIP file";
-  setStep(1);
+function switchView(view) {
+  console.log("Switching view to " + view);
 }
 
 function escapeHtml(str) {
