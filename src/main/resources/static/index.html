@@ -1,0 +1,107 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BugPredict AI — Predict Bugs Before Deployment</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">BP</div>
+      <div class="brand-text">
+        <h1>BugPredict AI</h1>
+        <p>Defect Risk Intelligence</p>
+      </div>
+    </div>
+    <ul class="nav-menu">
+      <li class="nav-item active"><button onclick="switchView('dashboard')"><span>📊</span> Dashboard</button></li>
+      <li class="nav-item"><button onclick="switchView('projects')"><span>📁</span> Projects</button></li>
+      <li class="nav-item"><button onclick="switchView('scans')"><span>🔍</span> Code Scans</button></li>
+      <li class="nav-item"><button onclick="switchView('predictions')"><span>🎯</span> Defect Predictions</button></li>
+      <li class="nav-item"><button onclick="switchView('remediation')"><span>🛠️</span> Remediation Tasks</button></li>
+    </ul>
+  </div>
+
+  <div class="main-wrapper">
+    <header>
+      <div class="page-title" id="pageTitle">Risk Overview</div>
+      <div class="header-actions">
+        <button class="btn-primary" onclick="openNewProjectModal()">+ New Project</button>
+      </div>
+    </header>
+
+    <div class="content-container" id="contentArea">
+      <!-- Metric Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Projects</div>
+          <div class="stat-value" id="statProjects">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Files Analyzed</div>
+          <div class="stat-value" id="statFiles">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">High / Critical Risk</div>
+          <div class="stat-value" style="color: var(--accent-crimson)" id="statHighRisk">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Average Risk Score</div>
+          <div class="stat-value" style="color: var(--accent-amber)" id="statAvgRisk">0.0</div>
+        </div>
+      </div>
+
+      <!-- Projects and Scans Section -->
+      <div class="card-table">
+        <div class="table-header">
+          <h3>Active Projects & Codebases</h3>
+          <button class="btn-secondary" onclick="loadDashboard()">Refresh</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Project Name</th>
+              <th>Source Directory</th>
+              <th>Files</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="projectsTableBody">
+            <tr><td colspan="6" style="text-align:center; padding: 20px;">No projects yet. Click "+ New Project" to get started.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Prediction Findings Section -->
+      <div class="card-table" style="margin-top: 28px;">
+        <div class="table-header">
+          <h3>High-Risk Files & Defect Predictions</h3>
+          <button class="btn-secondary" id="btnExportCsv" onclick="exportCsvReport()" style="display:none;">Export CSV</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Path</th>
+              <th>Risk Score</th>
+              <th>Category</th>
+              <th>Contributing Factors</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="predictionsTableBody">
+            <tr><td colspan="6" style="text-align:center; padding: 20px;">Select or scan a project to view defect predictions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
