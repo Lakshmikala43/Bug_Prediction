@@ -17,7 +17,6 @@ async function startUploadAndScan() {
     return;
   }
 
-  // Move to Step 2
   setStep(2);
 
   const formData = new FormData();
@@ -25,7 +24,7 @@ async function startUploadAndScan() {
   formData.append("file", selectedFile);
 
   try {
-    document.getElementById("scanStatusMsg").innerText = `Uploading and safely unpacking ${selectedFile.name}...`;
+    document.getElementById("scanStatusMsg").innerText = `Uploading and extracting ${selectedFile.name}...`;
     const uploadRes = await fetch("/api/projects/upload-zip", {
       method: "POST",
       body: formData
@@ -40,8 +39,7 @@ async function startUploadAndScan() {
 
     const project = await uploadRes.json();
 
-    // Trigger Scan
-    document.getElementById("scanStatusMsg").innerText = `Running AST parsing, multi-language bug detection, and code auto-correction...`;
+    document.getElementById("scanStatusMsg").innerText = `Scanning files in parallel across all programming languages...`;
     const scanRes = await fetch(`/api/scans/project/${project.id}/start`, { method: "POST" });
     const scanData = await scanRes.json();
     currentScanId = scanData.scanId;
@@ -61,7 +59,7 @@ function pollScan(scanId) {
       const scan = await res.json();
       if (scan.status === "COMPLETED") {
         clearInterval(interval);
-        loadResults(scanId);
+        loadDetectedBugs(scanId);
       } else if (scan.status === "FAILED") {
         clearInterval(interval);
         alert("Scan failed: " + scan.errorMessage);
@@ -70,23 +68,19 @@ function pollScan(scanId) {
     } catch (e) {
       clearInterval(interval);
     }
-  }, 1200);
+  }, 1000);
 }
 
-async function loadResults(scanId) {
+async function loadDetectedBugs(scanId) {
   try {
     const res = await fetch(`/api/workflow/scan/${scanId}/details`);
     if (!res.ok) return;
     const data = await res.json();
 
-    // Populate Statistics
     document.getElementById("resScannedFiles").innerText = data.scannedFiles;
     document.getElementById("resTotalBugs").innerText = data.totalBugs;
-    document.getElementById("resBugsCorrected").innerText = data.totalBugs;
     document.getElementById("resAvgRisk").innerText = (data.avgRiskScore || 0).toFixed(1);
-
-    document.getElementById("cleanZipSummary").innerText =
-      `All ${data.totalBugs} detected bug(s) across ${data.scannedFiles} file(s) have been patched with production-ready fixes.`;
+    document.getElementById("bugsDetectedTitle").innerText = `Found ${data.totalBugs} Error(s) Across ${data.scannedFiles} File(s)`;
 
     const container = document.getElementById("bugDetailsList");
     container.innerHTML = "";
@@ -110,12 +104,12 @@ async function loadResults(scanId) {
                 <strong>Bug #${idx + 1}: ${escapeHtml(b.ruleName)} (Line ${b.lineNumber})</strong>
                 <span class="badge ${b.severity === 'CRITICAL' ? 'badge-critical' : 'badge-high'}">${b.severity}</span>
               </div>
-              <p style="font-size: 13px; color: var(--text-main); margin-top: 6px;">${escapeHtml(b.message)}</p>
-              <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;"><strong>Fix Applied:</strong> ${escapeHtml(b.recommendation)}</div>
+              <p style="font-size: 13.5px; color: var(--text-main); margin-top: 6px;">${escapeHtml(b.message)}</p>
+              <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;"><strong>Proposed Fix:</strong> ${escapeHtml(b.recommendation)}</div>
 
               <div class="code-snippet">
-                <div class="diff-before">❌ Original: ${escapeHtml(b.originalSnippet)}</div>
-                <div class="diff-after">✅ Corrected: ${escapeHtml(b.suggestedPatch)}</div>
+                <div class="diff-before">❌ Original Line: ${escapeHtml(b.originalSnippet)}</div>
+                <div class="diff-after">✅ Fixed Patch:  ${escapeHtml(b.suggestedPatch)}</div>
               </div>
             </div>
           `).join("");
@@ -152,6 +146,34 @@ async function loadResults(scanId) {
   }
 }
 
+async function triggerBugCorrection() {
+  if (!currentScanId) return;
+
+  const btn = document.getElementById("btnTriggerCorrection");
+  btn.disabled = true;
+  btn.innerText = "Applying Patches & Compiling Clean ZIP...";
+
+  try {
+    const res = await fetch(`/api/workflow/scan/${currentScanId}/apply-corrections`, {
+      method: "POST"
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      document.getElementById("correctedZipMsg").innerText =
+        `Successfully corrected all ${result.correctedBugsCount} detected bugs! Your fixed project is ready to download.`;
+      setStep(4);
+    } else {
+      alert("Failed to apply corrections.");
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "✨ Correct Bugs & Generate ZIP ➔";
+  }
+}
+
 function downloadCleanZip() {
   if (currentScanId) {
     window.location.href = `/api/reports/scan/${currentScanId}/download-corrected-zip`;
@@ -162,11 +184,12 @@ function setStep(stepNum) {
   document.getElementById("step-1").style.display = (stepNum === 1) ? "block" : "none";
   document.getElementById("step-2").style.display = (stepNum === 2) ? "block" : "none";
   document.getElementById("step-3").style.display = (stepNum === 3) ? "block" : "none";
+  document.getElementById("step-4").style.display = (stepNum === 4) ? "block" : "none";
 
   for (let i = 1; i <= 4; i++) {
     const el = document.getElementById(`indicator-step-${i}`);
     if (el) {
-      if (i <= stepNum || (stepNum === 3 && i === 4)) {
+      if (i <= stepNum) {
         el.classList.add("active");
       } else {
         el.classList.remove("active");

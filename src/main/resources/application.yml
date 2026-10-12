@@ -16,16 +16,19 @@
     properties:
       hibernate:
         format_sql: false
-        dialect: ${SPRING_JPA_DIALECT:org.hibernate.dialect.H2Dialect}
   flyway:
     enabled: false
   servlet:
     multipart:
-      max-file-size: 50MB
-      max-request-size: 50MB
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
 
 server:
   port: ${PORT:8080}
+  tomcat:
+    max-swallow-size: 500MB
+    max-http-form-post-size: 500MB
 
 bugpredict:
   jwt:
