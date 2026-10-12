@@ -6,7 +6,7 @@ function onFileSelected(event) {
   if (!selectedFile) return;
 
   document.getElementById("selectedFileName").innerText = selectedFile.name;
-  document.getElementById("selectedFileSize").innerText = `(${(selectedFile.size / 1024).toFixed(1)} KB)`;
+  document.getElementById("selectedFileSize").innerText = `${(selectedFile.size / 1024).toFixed(1)} KB`;
   document.getElementById("fileSelectedBar").style.display = "flex";
   document.getElementById("uploadPromptText").innerText = "Selected: " + selectedFile.name;
 }
@@ -39,36 +39,24 @@ async function startUploadAndScan() {
 
     const project = await uploadRes.json();
 
-    document.getElementById("scanStatusMsg").innerText = `Scanning files in parallel across all programming languages...`;
-    const scanRes = await fetch(`/api/scans/project/${project.id}/start`, { method: "POST" });
+    document.getElementById("scanStatusMsg").innerText = `Analyzing code files and detecting bugs in parallel...`;
+    
+    // Direct Synchronous Scan Execution
+    const scanRes = await fetch(`/api/scans/project/${project.id}/start-sync`, { method: "POST" });
+    if (!scanRes.ok) {
+      const err = await scanRes.json();
+      alert("Scan failed: " + (err.error || "Server error"));
+      setStep(1);
+      return;
+    }
     const scanData = await scanRes.json();
     currentScanId = scanData.scanId;
 
-    pollScan(scanData.scanId);
+    await loadDetectedBugs(currentScanId);
   } catch (err) {
     alert("Error: " + err.message);
     setStep(1);
   }
-}
-
-function pollScan(scanId) {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch(`/api/scans/${scanId}`);
-      if (!res.ok) return;
-      const scan = await res.json();
-      if (scan.status === "COMPLETED") {
-        clearInterval(interval);
-        loadDetectedBugs(scanId);
-      } else if (scan.status === "FAILED") {
-        clearInterval(interval);
-        alert("Scan failed: " + scan.errorMessage);
-        setStep(1);
-      }
-    } catch (e) {
-      clearInterval(interval);
-    }
-  }, 1000);
 }
 
 async function loadDetectedBugs(scanId) {
@@ -86,7 +74,7 @@ async function loadDetectedBugs(scanId) {
     container.innerHTML = "";
 
     if (data.files.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-muted);">No source files found in this archive.</div>`;
+      container.innerHTML = `<div style="text-align:center; padding: 40px; color: var(--text-muted);">No source files found in this archive.</div>`;
     } else {
       data.files.forEach(file => {
         const hasBugs = file.bugs && file.bugs.length > 0;
@@ -94,67 +82,62 @@ async function loadDetectedBugs(scanId) {
         let bugItemsHtml = "";
         if (!hasBugs) {
           bugItemsHtml = `
-            <div style="padding: 16px 20px; color: var(--accent-sage); font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
-              <span>✅</span> Clean File — 0 defects or bugs detected.
+            <div style="padding: 18px 24px; color: var(--accent-sage); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px;">
+              <span>✅</span> Clean File — No bugs or security risks found.
             </div>
           `;
         } else {
           bugItemsHtml = file.bugs.map((b, idx) => {
-            const severityBadge = (b.severity === 'CRITICAL') ? 'badge-critical' : 'badge-high';
+            const severityBadge = (b.severity === 'CRITICAL') ? 'pill-bugs' : 'status-pill';
 
             return `
-              <div class="bug-item-row">
-                <div class="bug-header-line">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="line-indicator">LINE ${b.lineNumber}</span>
-                    <span class="bug-type-tag">Bug #${idx + 1}: ${escapeHtml(formatBugTitle(b.ruleName))}</span>
+              <div class="bug-defect-item">
+                <div class="bug-title-row">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="background: #EAE6DF; color: #2C3530; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">LINE ${b.lineNumber}</span>
+                    <span style="font-size: 15px; font-weight: 700; color: #9C1F16;">Bug #${idx + 1}: ${escapeHtml(formatBugTitle(b.ruleName))}</span>
                   </div>
-                  <span class="badge ${severityBadge}">${b.severity}</span>
+                  <span class="${severityBadge}" style="font-size: 11px; padding: 3px 10px; border-radius: 20px;">${b.severity}</span>
                 </div>
 
-                <div class="bug-desc-text">
+                <p style="font-size: 14px; color: var(--text-main); margin: 6px 0 8px; line-height: 1.5;">
                   <strong>Issue:</strong> ${escapeHtml(b.message)}
-                </div>
+                </p>
 
-                <div class="bug-fix-hint">
+                <div style="font-size: 13px; color: var(--text-secondary); background: #FAF8F5; padding: 10px 14px; border-radius: 6px; border-left: 3px solid var(--accent-sage); margin-bottom: 12px;">
                   <strong>Recommended Fix:</strong> ${escapeHtml(b.recommendation)}
                 </div>
 
-                <table class="code-diff-table">
-                  <tr class="diff-row-bad">
-                    <td style="width: 30px; font-weight: bold; text-align: center;">-</td>
-                    <td><strong>Detected Bug:</strong> ${escapeHtml(b.originalSnippet)}</td>
-                  </tr>
-                  <tr class="diff-row-good">
-                    <td style="width: 30px; font-weight: bold; text-align: center;">+</td>
-                    <td><strong>Automated Patch:</strong> ${escapeHtml(b.suggestedPatch)}</td>
-                  </tr>
-                </table>
+                <div class="code-diff-viewer">
+                  <div class="diff-line diff-line-bad">
+                    <span class="diff-sign">-</span>
+                    <span>${escapeHtml(b.originalSnippet)}</span>
+                  </div>
+                  <div class="diff-line diff-line-good">
+                    <span class="diff-sign">+</span>
+                    <span>${escapeHtml(b.suggestedPatch)}</span>
+                  </div>
+                </div>
               </div>
             `;
           }).join("");
         }
 
         const fileBlock = document.createElement("div");
-        fileBlock.className = "file-card-box";
-
-        let riskBadge = "badge-low";
-        if (file.riskCategory === "CRITICAL") riskBadge = "badge-critical";
-        else if (file.riskCategory === "HIGH") riskBadge = "badge-high";
-        else if (file.riskCategory === "MEDIUM") riskBadge = "badge-medium";
+        fileBlock.className = "file-defect-card";
 
         fileBlock.innerHTML = `
-          <div class="file-card-header">
-            <div>
-              <span class="badge badge-low">${escapeHtml(file.language || "Code")}</span>
-              <span class="file-name-title" style="margin-left: 8px;">📄 ${escapeHtml(file.fileName)}</span>
-              <span class="file-path-sub">${escapeHtml(file.relativePath)}</span>
+          <div class="file-defect-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="lang-tag">${escapeHtml(file.language || "Code")}</span>
+              <span style="font-size: 15px; font-weight: 700;">📄 ${escapeHtml(file.fileName)}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted);">${escapeHtml(file.relativePath)}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <span class="bug-counter-pill ${hasBugs ? 'bug-counter-has-bugs' : 'bug-counter-clean'}">
-                ${hasBugs ? '⚠️ ' + file.bugs.length + ' Bug(s) Detected' : '✅ 0 Bugs'}
+              <span class="bug-counter-pill ${hasBugs ? 'pill-bugs' : 'pill-clean'}">
+                ${hasBugs ? '⚠️ ' + file.bugs.length + ' Bug(s)' : '✅ Clean'}
               </span>
-              <span class="badge ${riskBadge}">${file.riskCategory} RISK</span>
+              <span style="font-size: 12.5px; font-weight: 700; color: var(--text-secondary);">Risk: ${file.riskScore.toFixed(1)}</span>
             </div>
           </div>
           <div>
@@ -181,7 +164,7 @@ async function triggerBugCorrection() {
 
   const btn = document.getElementById("btnTriggerCorrection");
   btn.disabled = true;
-  btn.innerText = "Applying Patches & Compiling Clean ZIP...";
+  btn.innerHTML = `<span>Applying Patches & Generating Clean ZIP...</span>`;
 
   try {
     const res = await fetch(`/api/workflow/scan/${currentScanId}/apply-corrections`, {
@@ -191,7 +174,7 @@ async function triggerBugCorrection() {
     if (res.ok) {
       const result = await res.json();
       document.getElementById("correctedZipMsg").innerText =
-        `Successfully corrected all ${result.correctedBugsCount} detected bugs! Your fixed project is ready to download.`;
+        `Successfully corrected all ${result.correctedBugsCount} detected bugs! Your zero-bug project archive is compiled and ready for download.`;
       setStep(4);
     } else {
       alert("Failed to apply corrections.");
@@ -200,29 +183,36 @@ async function triggerBugCorrection() {
     alert("Error: " + e.message);
   } finally {
     btn.disabled = false;
-    btn.innerText = "✨ Correct Bugs & Generate ZIP ➔";
+    btn.innerHTML = `<span>✨ Correct Bugs & Generate ZIP</span><span>➔</span>`;
   }
 }
 
 function downloadCleanZip() {
   if (currentScanId) {
-    window.location.href = `/api/reports/scan/${currentScanId}/download-corrected-zip`;
+    const link = document.createElement("a");
+    link.href = `/api/reports/scan/${currentScanId}/download-corrected-zip`;
+    link.download = `scan-${currentScanId}-corrected-code.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 }
 
 function setStep(stepNum) {
-  document.getElementById("step-1").style.display = (stepNum === 1) ? "block" : "none";
-  document.getElementById("step-2").style.display = (stepNum === 2) ? "block" : "none";
-  document.getElementById("step-3").style.display = (stepNum === 3) ? "block" : "none";
-  document.getElementById("step-4").style.display = (stepNum === 4) ? "block" : "none";
+  document.getElementById("view-stage-1").style.display = (stepNum === 1) ? "block" : "none";
+  document.getElementById("view-stage-2").style.display = (stepNum === 2) ? "block" : "none";
+  document.getElementById("view-stage-3").style.display = (stepNum === 3) ? "block" : "none";
+  document.getElementById("view-stage-4").style.display = (stepNum === 4) ? "block" : "none";
 
   for (let i = 1; i <= 4; i++) {
-    const el = document.getElementById(`indicator-step-${i}`);
+    const el = document.getElementById(`step-nav-${i}`);
     if (el) {
-      if (i <= stepNum) {
-        el.classList.add("active");
+      if (i === stepNum) {
+        el.className = "step-item active";
+      } else if (i < stepNum) {
+        el.className = "step-item completed";
       } else {
-        el.classList.remove("active");
+        el.className = "step-item";
       }
     }
   }
@@ -233,7 +223,7 @@ function resetToUpload() {
   currentScanId = null;
   document.getElementById("zipFileInput").value = "";
   document.getElementById("fileSelectedBar").style.display = "none";
-  document.getElementById("uploadPromptText").innerText = "Click here to browse and select a project .ZIP file";
+  document.getElementById("uploadPromptText").innerText = "Click to Browse or Drag & Drop Project .ZIP File";
   setStep(1);
 }
 

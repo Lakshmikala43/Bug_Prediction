@@ -3,148 +3,169 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BugPredict AI — Predict & Correct Code Defects</title>
+  <title>BugPredict AI — Predict Bugs & Auto-Fix Code</title>
   <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
-  <header>
+  <!-- Top Navigation -->
+  <header class="top-nav">
     <div class="brand-wrapper">
-      <div class="brand-badge">BP</div>
-      <div class="brand-title">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
         <h1>BugPredict AI</h1>
-        <p>Universal Defect Detection & Automated Code Repair</p>
+        <p>Pre-Deployment Defect Intelligence & Automated Code Repair</p>
       </div>
     </div>
-    <div style="font-size: 13px; color: var(--text-muted);">
-      Zero External API Keys • Runs Locally
+    <div class="header-badges">
+      <div class="status-pill">
+        <span class="status-dot-pulse"></span>
+        <span>Local Engine Active</span>
+      </div>
     </div>
   </header>
 
-  <!-- Step Tracker -->
-  <div class="stepper-container">
-    <div class="step-item active" id="indicator-step-1">
-      <div class="step-num">1</div>
-      <span>Upload ZIP</span>
-    </div>
-    <div class="step-item" id="indicator-step-2">
-      <div class="step-num">2</div>
-      <span>Scan Codebase</span>
-    </div>
-    <div class="step-item" id="indicator-step-3">
-      <div class="step-num">3</div>
-      <span>Explore Detected Bugs</span>
-    </div>
-    <div class="step-item" id="indicator-step-4">
-      <div class="step-num">4</div>
-      <span>Correct Bugs & Download ZIP</span>
+  <!-- Progress Stepper -->
+  <div class="stepper-nav">
+    <div class="stepper-track">
+      <div class="step-item active" id="step-nav-1">
+        <div class="step-bubble">1</div>
+        <span>Upload Project ZIP</span>
+      </div>
+      <div class="step-item" id="step-nav-2">
+        <div class="step-bubble">2</div>
+        <span>Scan Codebase</span>
+      </div>
+      <div class="step-item" id="step-nav-3">
+        <div class="step-bubble">3</div>
+        <span>Explore Detected Bugs</span>
+      </div>
+      <div class="step-item" id="step-nav-4">
+        <div class="step-bubble">4</div>
+        <span>Download Corrected ZIP</span>
+      </div>
     </div>
   </div>
 
-  <main class="main-content">
-    <!-- STEP 1: UPLOAD -->
-    <div id="step-1" class="card">
-      <h2 style="margin-bottom: 8px;">Step 1: Upload Your Project ZIP Archive</h2>
-      <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 14px;">
-        Upload a ZIP archive containing any codebase (Java, Python, JavaScript, TypeScript, C/C++, C#, Go, SQL, PHP, etc.).
-      </p>
+  <main class="app-container">
+    <!-- STAGE 1: UPLOAD CARD -->
+    <div id="view-stage-1" class="app-card">
+      <div style="max-width: 650px; margin-bottom: 28px;">
+        <h2 style="font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 10px;">
+          Analyze Your Codebase Before Deployment
+        </h2>
+        <p style="color: var(--text-secondary); font-size: 15px; line-height: 1.5;">
+          Upload a ZIP archive containing any application. BugPredict AI will scan every source file in parallel, detect potential bugs and security risks, and generate an auto-corrected zero-bug ZIP archive.
+        </p>
+      </div>
 
-      <div class="drop-zone" onclick="document.getElementById('zipFileInput').click()">
-        <div style="font-size: 40px; margin-bottom: 12px;">📦</div>
-        <h3 id="uploadPromptText">Click here to browse and select a project .ZIP file</h3>
-        <p style="color: var(--text-muted); font-size: 13px; margin-top: 6px;">Supported: .zip archives across any programming language</p>
+      <!-- Drag & Drop Interactive Zone -->
+      <div class="upload-hero" onclick="document.getElementById('zipFileInput').click()">
+        <div class="upload-icon-circle">📦</div>
+        <h3 id="uploadPromptText" style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">
+          Click to Browse or Drag & Drop Project .ZIP File
+        </h3>
+        <p style="color: var(--text-muted); font-size: 13.5px;">
+          Supports Java, Python, TypeScript, JavaScript, C/C++, C#, Go, PHP, Rust, and SQL
+        </p>
       </div>
 
       <input type="file" id="zipFileInput" accept=".zip" style="display:none;" onchange="onFileSelected(event)">
 
-      <div id="fileSelectedBar" style="display:none; margin-top: 20px; padding: 14px; background: #FAF8F5; border: 1px solid var(--border-subtle); border-radius: 6px; justify-content: space-between; align-items: center;">
-        <div>
-          <strong id="selectedFileName">project.zip</strong>
-          <span id="selectedFileSize" style="color: var(--text-muted); font-size: 12px; margin-left: 8px;"></span>
+      <!-- Selected File Confirmation Bar -->
+      <div id="fileSelectedBar" style="display:none; margin-top: 24px; padding: 18px 24px; background: var(--bg-subtle); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 22px;">📁</span>
+          <div>
+            <div style="font-weight: 700; font-size: 15px;" id="selectedFileName">project.zip</div>
+            <div style="color: var(--text-secondary); font-size: 12.5px;" id="selectedFileSize">0 KB</div>
+          </div>
         </div>
-        <button class="btn-primary" onclick="startUploadAndScan()">Proceed to Scan ➔</button>
+        <button class="btn-primary-action" onclick="startUploadAndScan()">
+          <span>Proceed to Scan</span>
+          <span>➔</span>
+        </button>
       </div>
     </div>
 
-    <!-- STEP 2: SCANNING PROGRESS -->
-    <div id="step-2" class="card" style="display:none; text-align: center; padding: 60px 20px;">
-      <div style="font-size: 44px; margin-bottom: 16px;">🔍</div>
-      <h2>Scanning Project Files...</h2>
-      <p style="color: var(--text-muted); margin-top: 8px; font-size: 14.5px;" id="scanStatusMsg">
+    <!-- STAGE 2: LIVE SCANNING PROGRESS -->
+    <div id="view-stage-2" class="app-card" style="display:none; text-align: center; padding: 80px 20px;">
+      <div class="spinner-ring"></div>
+      <h2 style="font-size: 24px; font-weight: 800; letter-spacing: -0.4px;">Analyzing Project Codebase...</h2>
+      <p style="color: var(--text-secondary); font-size: 15px; margin-top: 10px;" id="scanStatusMsg">
         Extracting files, parsing AST complexity, and detecting bugs across all languages...
       </p>
-      <div style="width: 280px; height: 6px; background: #E8E5DF; border-radius: 4px; margin: 24px auto 0; overflow: hidden;">
-        <div style="width: 60%; height: 100%; background: var(--accent-terracotta); animation: pulse 1.5s infinite;"></div>
-      </div>
     </div>
 
-    <!-- STEP 3: EXPLORE DETECTED BUGS -->
-    <div id="step-3" style="display:none;">
-      <!-- Hero Action Bar to Trigger Correction -->
-      <div class="card" style="background: #FFF9F5; border: 2px solid var(--accent-terracotta); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+    <!-- STAGE 3: EXPLORE DETECTED BUGS -->
+    <div id="view-stage-3" style="display:none;">
+      <!-- Hero Banner with Primary "Correct Bugs" Button -->
+      <div class="app-card" style="background: linear-gradient(135deg, #FFF8F5, #FFF3EE); border: 2px solid var(--accent-terracotta); margin-bottom: 28px; display: flex; justify-content: space-between; align-items: center;">
         <div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 24px;">🔍</span>
-            <h3 style="color: var(--text-main);" id="bugsDetectedTitle">Detected Errors in Your Codebase</h3>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 26px;">🔍</span>
+            <h3 style="font-size: 20px; font-weight: 800;" id="bugsDetectedTitle">Detected Bugs in Your Codebase</h3>
           </div>
-          <p style="color: var(--text-muted); font-size: 13.5px; margin-top: 4px;">
-            Explore all detected bugs, rule violations, and suggested code patches below. Once reviewed, click "Correct Bugs" to generate your fixed project.
+          <p style="color: var(--text-secondary); font-size: 14.5px; margin-top: 6px; max-width: 650px;">
+            Explore the detected defects and proposed fixes below. When you're ready, click "Correct Bugs & Generate ZIP" to compile your fixed project.
           </p>
         </div>
         <div>
-          <button class="btn-primary" id="btnTriggerCorrection" onclick="triggerBugCorrection()" style="padding: 14px 28px; font-size: 16px;">
-            ✨ Correct Bugs & Generate ZIP ➔
+          <button class="btn-primary-action" id="btnTriggerCorrection" onclick="triggerBugCorrection()" style="font-size: 16px; padding: 16px 36px;">
+            <span>✨ Correct Bugs & Generate ZIP</span>
+            <span>➔</span>
           </button>
         </div>
       </div>
 
-      <!-- Metrics Summary -->
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
-        <div class="card" style="padding: 16px;">
-          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Scanned Files</div>
-          <div style="font-size: 26px; font-weight: 700; margin-top: 4px;" id="resScannedFiles">0</div>
+      <!-- Statistics Summary Grid -->
+      <div class="metrics-row">
+        <div class="metric-stat-box">
+          <div class="metric-stat-label">Scanned Source Files</div>
+          <div class="metric-stat-number" id="resScannedFiles">0</div>
         </div>
-        <div class="card" style="padding: 16px;">
-          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Total Detected Bugs</div>
-          <div style="font-size: 26px; font-weight: 700; color: var(--accent-crimson); margin-top: 4px;" id="resTotalBugs">0</div>
+        <div class="metric-stat-box">
+          <div class="metric-stat-label">Total Detected Bugs</div>
+          <div class="metric-stat-number" style="color: var(--accent-crimson);" id="resTotalBugs">0</div>
         </div>
-        <div class="card" style="padding: 16px;">
-          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Codebase Risk Score</div>
-          <div style="font-size: 26px; font-weight: 700; color: var(--accent-amber); margin-top: 4px;" id="resAvgRisk">0.0</div>
+        <div class="metric-stat-box">
+          <div class="metric-stat-label">Average Codebase Risk</div>
+          <div class="metric-stat-number" style="color: var(--accent-amber);" id="resAvgRisk">0.0</div>
         </div>
       </div>
 
-      <!-- Bugs List Container -->
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+      <!-- File-by-File Defect Cards -->
+      <div class="app-card" style="padding: 28px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
           <div>
-            <h3>All Detected Bugs & Code Flaws</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
-              Examine each issue, affected line number, severity, and proposed fix.
+            <h3 style="font-size: 18px; font-weight: 800;">Detailed File Inspection</h3>
+            <p style="color: var(--text-secondary); font-size: 13.5px; margin-top: 4px;">
+              Examine each defect, exact source line number, severity tag, and code patch preview.
             </p>
           </div>
-          <button class="btn-secondary" onclick="resetToUpload()">+ Upload Different Project</button>
+          <button class="btn-ghost-action" onclick="resetToUpload()">+ Scan Another Project</button>
         </div>
 
         <div id="bugDetailsList">
-          <!-- Populated dynamically -->
+          <!-- Dynamically populated per-file defect cards -->
         </div>
       </div>
     </div>
 
-    <!-- STEP 4: CORRECTED ZIP READY FOR DOWNLOAD -->
-    <div id="step-4" style="display:none;">
-      <div class="card" style="text-align: center; padding: 50px 20px; background: #F4FAF6; border: 2px solid var(--accent-sage);">
-        <div style="font-size: 48px; margin-bottom: 14px;">🎉</div>
-        <h2 style="color: var(--text-main);">All Bugs Successfully Corrected!</h2>
-        <p style="color: var(--text-muted); max-width: 600px; margin: 10px auto 28px; font-size: 15px;" id="correctedZipMsg">
-          All detected bugs across your codebase have been automatically fixed with production-grade patches. Your zero-bug project archive is ready to download.
+    <!-- STAGE 4: DOWNLOAD ZERO-BUG ZIP ARCHIVE -->
+    <div id="view-stage-4" style="display:none;">
+      <div class="app-card" style="text-align: center; padding: 70px 24px; background: linear-gradient(135deg, #F5FCF7, #EEFAF2); border: 2px solid var(--accent-sage);">
+        <div style="font-size: 54px; margin-bottom: 16px;">🎉</div>
+        <h2 style="font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">All Detected Bugs Successfully Corrected!</h2>
+        <p style="color: var(--text-secondary); max-width: 620px; margin: 12px auto 32px; font-size: 15.5px; line-height: 1.6;" id="correctedZipMsg">
+          All bugs across your source files have been automatically resolved with validated fixes. Your clean, production-ready codebase is ready for download.
         </p>
 
-        <div style="display: flex; justify-content: center; gap: 16px;">
-          <button class="btn-success" id="btnDownloadCleanZip" onclick="downloadCleanZip()" style="font-size: 16px; padding: 14px 32px;">
-            ⬇️ Download Corrected ZIP (0 Bugs)
+        <div style="display: flex; justify-content: center; gap: 18px;">
+          <button class="btn-success-action" id="btnDownloadCleanZip" onclick="downloadCleanZip()">
+            <span>⬇️</span>
+            <span>Download Corrected ZIP (0 Bugs)</span>
           </button>
-          <button class="btn-secondary" onclick="resetToUpload()" style="font-size: 15px; padding: 12px 24px;">
+          <button class="btn-ghost-action" onclick="resetToUpload()" style="padding: 14px 28px; font-size: 15px;">
             + Scan Another Project
           </button>
         </div>
