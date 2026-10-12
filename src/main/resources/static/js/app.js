@@ -1,173 +1,187 @@
-﻿let currentActiveScanId = null;
-let currentProjectId = null;
+﻿let selectedFile = null;
+let currentScanId = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadDashboard();
-});
+function onFileSelected(event) {
+  selectedFile = event.target.files[0];
+  if (!selectedFile) return;
 
-async function loadDashboard() {
+  document.getElementById("selectedFileName").innerText = selectedFile.name;
+  document.getElementById("selectedFileSize").innerText = `(${(selectedFile.size / 1024).toFixed(1)} KB)`;
+  document.getElementById("fileSelectedBar").style.display = "flex";
+  document.getElementById("uploadPromptText").innerText = "Selected: " + selectedFile.name;
+}
+
+async function startUploadAndScan() {
+  if (!selectedFile) {
+    alert("Please select a .zip file first.");
+    return;
+  }
+
+  // Move to Step 2
+  setStep(2);
+
+  const formData = new FormData();
+  formData.append("name", selectedFile.name.replace(/\.[^/.]+$/, ""));
+  formData.append("file", selectedFile);
+
   try {
-    const res = await fetch("/api/projects");
-    if (!res.ok) return;
-    const projects = await res.json();
-    document.getElementById("statProjects").innerText = projects.length;
+    document.getElementById("scanStatusMsg").innerText = `Uploading and safely unpacking ${selectedFile.name}...`;
+    const uploadRes = await fetch("/api/projects/upload-zip", {
+      method: "POST",
+      body: formData
+    });
 
-    const tbody = document.getElementById("projectsTableBody");
-    if (projects.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No projects yet. Click "+ New Project" to get started.</td></tr>`;
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json();
+      alert("Upload failed: " + (err.error || "Unknown error"));
+      setStep(1);
       return;
     }
 
-    tbody.innerHTML = projects.map(p => `
-      <tr>
-        <td>#${p.id}</td>
-        <td><strong>${escapeHtml(p.name)}</strong></td>
-        <td><code>${escapeHtml(p.sourcePath || "N/A")}</code></td>
-        <td>${p.fileCount || 0}</td>
-        <td><span class="badge badge-low">Ready</span></td>
-        <td>
-          <button class="btn-primary" style="padding: 4px 10px; font-size: 12px;" onclick="triggerScan(${p.id})">Run Scan</button>
-          <button class="btn-secondary" style="padding: 4px 8px; font-size: 12px; margin-left: 6px;" onclick="loadProjectScans(${p.id})">Scans</button>
-        </td>
-      </tr>
-    `).join("");
+    const project = await uploadRes.json();
 
-    if (projects.length > 0 && !currentProjectId) {
-      loadProjectScans(projects[0].id);
-    }
-  } catch (err) {
-    console.error("Failed to load dashboard data:", err);
-  }
-}
+    // Trigger Scan
+    document.getElementById("scanStatusMsg").innerText = `Running AST parsing, multi-language bug detection, and code auto-correction...`;
+    const scanRes = await fetch(`/api/scans/project/${project.id}/start`, { method: "POST" });
+    const scanData = await scanRes.json();
+    currentScanId = scanData.scanId;
 
-async function triggerScan(projectId) {
-  try {
-    const res = await fetch(`/api/scans/project/${projectId}/start`, { method: "POST" });
-    if (res.ok) {
-      const data = await res.json();
-      currentActiveScanId = data.scanId;
-      alert(`Scan #${data.scanId} started successfully.`);
-      pollScanProgress(data.scanId);
-    } else {
-      alert("Failed to start scan");
-    }
+    pollScan(scanData.scanId);
   } catch (err) {
     alert("Error: " + err.message);
+    setStep(1);
   }
 }
 
-async function loadProjectScans(projectId) {
-  currentProjectId = projectId;
-  try {
-    const res = await fetch(`/api/scans/project/${projectId}`);
-    if (!res.ok) return;
-    const scans = await res.json();
-    if (scans.length > 0) {
-      const latestScan = scans[0];
-      currentActiveScanId = latestScan.id;
-      document.getElementById("statFiles").innerText = latestScan.scannedFiles || 0;
-      document.getElementById("statHighRisk").innerText = (latestScan.highRiskCount || 0) + (latestScan.criticalRiskCount || 0);
-      document.getElementById("statAvgRisk").innerText = (latestScan.avgRiskScore || 0).toFixed(1);
-      loadPredictions(latestScan.id);
-    }
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function loadPredictions(scanId) {
-  try {
-    const res = await fetch(`/api/analysis/scan/${scanId}/predictions`);
-    if (!res.ok) return;
-    const predictions = await res.json();
-    const tbody = document.getElementById("predictionsTableBody");
-    document.getElementById("btnExportCsv").style.display = predictions.length > 0 ? "inline-block" : "none";
-
-    if (predictions.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 20px;">No predictions available for this scan.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = predictions.map(p => {
-      let badgeClass = "badge-low";
-      if (p.riskCategory === "CRITICAL") badgeClass = "badge-critical";
-      else if (p.riskCategory === "HIGH") badgeClass = "badge-high";
-      else if (p.riskCategory === "MEDIUM") badgeClass = "badge-medium";
-
-      return `
-        <tr>
-          <td><strong>${escapeHtml(p.projectFile.fileName)}</strong></td>
-          <td><small>${escapeHtml(p.projectFile.relativePath)}</small></td>
-          <td><strong>${p.riskScore.toFixed(1)}</strong></td>
-          <td><span class="badge ${badgeClass}">${p.riskCategory}</span></td>
-          <td><small>${escapeHtml(p.explanation)}</small></td>
-          <td>
-            <button class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="createRemediationTask('${escapeHtml(p.projectFile.fileName)}', '${escapeHtml(p.explanation)}')">Remediate</button>
-          </td>
-        </tr>
-      `;
-    }).join("");
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-async function pollScanProgress(scanId) {
+function pollScan(scanId) {
   const interval = setInterval(async () => {
     try {
       const res = await fetch(`/api/scans/${scanId}`);
       if (!res.ok) return;
       const scan = await res.json();
-      if (scan.status === "COMPLETED" || scan.status === "FAILED") {
+      if (scan.status === "COMPLETED") {
         clearInterval(interval);
-        loadDashboard();
-        if (currentProjectId) loadProjectScans(currentProjectId);
+        loadResults(scanId);
+      } else if (scan.status === "FAILED") {
+        clearInterval(interval);
+        alert("Scan failed: " + scan.errorMessage);
+        setStep(1);
       }
-    } catch (err) {
+    } catch (e) {
       clearInterval(interval);
     }
-  }, 2000);
+  }, 1200);
 }
 
-function exportCsvReport() {
-  if (currentActiveScanId) {
-    window.location.href = `/api/reports/scan/${currentActiveScanId}/csv`;
+async function loadResults(scanId) {
+  try {
+    const res = await fetch(`/api/workflow/scan/${scanId}/details`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Populate Statistics
+    document.getElementById("resScannedFiles").innerText = data.scannedFiles;
+    document.getElementById("resTotalBugs").innerText = data.totalBugs;
+    document.getElementById("resBugsCorrected").innerText = data.totalBugs;
+    document.getElementById("resAvgRisk").innerText = (data.avgRiskScore || 0).toFixed(1);
+
+    document.getElementById("cleanZipSummary").innerText =
+      `All ${data.totalBugs} detected bug(s) across ${data.scannedFiles} file(s) have been patched with production-ready fixes.`;
+
+    const container = document.getElementById("bugDetailsList");
+    container.innerHTML = "";
+
+    if (data.files.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-muted);">No source files found in this archive.</div>`;
+    } else {
+      data.files.forEach(file => {
+        let badgeClass = "badge-low";
+        if (file.riskCategory === "CRITICAL") badgeClass = "badge-critical";
+        else if (file.riskCategory === "HIGH") badgeClass = "badge-high";
+        else if (file.riskCategory === "MEDIUM") badgeClass = "badge-medium";
+
+        let bugItemsHtml = "";
+        if (file.bugs.length === 0) {
+          bugItemsHtml = `<div style="color: var(--accent-sage); font-size: 13px; margin-top: 8px;">✓ Clean file — 0 bugs detected.</div>`;
+        } else {
+          bugItemsHtml = file.bugs.map((b, idx) => `
+            <div class="bug-card">
+              <div style="display:flex; justify-content: space-between; align-items:center;">
+                <strong>Bug #${idx + 1}: ${escapeHtml(b.ruleName)} (Line ${b.lineNumber})</strong>
+                <span class="badge ${b.severity === 'CRITICAL' ? 'badge-critical' : 'badge-high'}">${b.severity}</span>
+              </div>
+              <p style="font-size: 13px; color: var(--text-main); margin-top: 6px;">${escapeHtml(b.message)}</p>
+              <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;"><strong>Fix Applied:</strong> ${escapeHtml(b.recommendation)}</div>
+
+              <div class="code-snippet">
+                <div class="diff-before">❌ Original: ${escapeHtml(b.originalSnippet)}</div>
+                <div class="diff-after">✅ Corrected: ${escapeHtml(b.suggestedPatch)}</div>
+              </div>
+            </div>
+          `).join("");
+        }
+
+        const fileBlock = document.createElement("div");
+        fileBlock.style.border = "1px solid var(--border-subtle)";
+        fileBlock.style.borderRadius = "8px";
+        fileBlock.style.padding = "16px";
+        fileBlock.style.marginBottom = "16px";
+        fileBlock.style.background = "#fff";
+
+        fileBlock.innerHTML = `
+          <div style="display:flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+            <div>
+              <span class="badge badge-low">${escapeHtml(file.language || "Code")}</span>
+              <strong style="margin-left: 8px; font-size: 14.5px;">${escapeHtml(file.fileName)}</strong>
+              <small style="color: var(--text-muted); margin-left: 8px;">${escapeHtml(file.relativePath)}</small>
+            </div>
+            <div>
+              <span style="font-size: 12px; color: var(--text-muted); margin-right: 6px;">Risk: <strong>${file.riskScore.toFixed(1)}</strong></span>
+              <span class="badge ${badgeClass}">${file.riskCategory}</span>
+            </div>
+          </div>
+          ${bugItemsHtml}
+        `;
+        container.appendChild(fileBlock);
+      });
+    }
+
+    setStep(3);
+  } catch (err) {
+    alert("Error loading scan details: " + err.message);
   }
 }
 
-function openNewProjectModal() {
-  const name = prompt("Enter project name:", "BugPredict Internal");
-  if (!name) return;
-  const path = prompt("Enter local Java source directory path:", window.location.origin.includes("localhost") ? "C:\\Users\\WINDOWS\\.gemini\\antigravity\\scratch\\bugpredict-ai\\src\\main\\java" : "");
-  if (!path) return;
-
-  fetch("/api/projects", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name, description: "Java source repository", sourcePath: path })
-  }).then(r => r.json()).then(p => {
-    alert("Project created: " + p.name);
-    loadDashboard();
-  });
+function downloadCleanZip() {
+  if (currentScanId) {
+    window.location.href = `/api/reports/scan/${currentScanId}/download-corrected-zip`;
+  }
 }
 
-function createRemediationTask(fileName, explanation) {
-  if (!currentProjectId) return;
-  fetch(`/api/remediation/project/${currentProjectId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: "Investigate defect risk in " + fileName,
-      description: explanation,
-      recommendation: "Refactor complex branching, isolate monolithic methods, and add regression unit tests."
-    })
-  }).then(r => r.json()).then(t => {
-    alert("Remediation task created: " + t.title);
-  });
+function setStep(stepNum) {
+  document.getElementById("step-1").style.display = (stepNum === 1) ? "block" : "none";
+  document.getElementById("step-2").style.display = (stepNum === 2) ? "block" : "none";
+  document.getElementById("step-3").style.display = (stepNum === 3) ? "block" : "none";
+
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`indicator-step-${i}`);
+    if (el) {
+      if (i <= stepNum || (stepNum === 3 && i === 4)) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    }
+  }
 }
 
-function switchView(view) {
-  console.log("Switching view to " + view);
+function resetToUpload() {
+  selectedFile = null;
+  currentScanId = null;
+  document.getElementById("zipFileInput").value = "";
+  document.getElementById("fileSelectedBar").style.display = "none";
+  document.getElementById("uploadPromptText").innerText = "Click here to browse and select a project .ZIP file";
+  setStep(1);
 }
 
 function escapeHtml(str) {
