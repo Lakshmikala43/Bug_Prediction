@@ -1,51 +1,73 @@
-﻿# BugPredict AI — Predict Bugs Before Deployment
+# BugPredict AI — Software Defect Scanner & Automated Bug Repair
 
-BugPredict AI is an enterprise-grade, Java-based software defect prediction and code-risk intelligence platform. It analyzes Java source code via AST parsing (McCabe Cyclomatic Complexity, Nesting Depth, Method Length, Class Count), correlates with historical defect datasets, and delivers explainable risk scores with testing and remediation priorities.
-
----
-
-## 🌟 Key Features
-
-1. **AST-Driven Java Source Scanner**: Recursive discovery and AST parsing with JavaParser, measuring SLOC, McCabe Cyclomatic Complexity, Max Nesting, and Monolithic Methods.
-2. **Explainable Risk Prediction Engine**: Transparent scoring (0–100) evaluating complexity, nesting depth, code churn, and defect histories.
-3. **Defect History Ingestion**: CSV ingestion of historical defect datasets to align known buggy modules with active code scans.
-4. **Remediation Task Management**: Transition defect risks into actionable engineering tasks (`OPEN` -> `IN_PROGRESS` -> `RESOLVED`).
-5. **Report & Export System**: Instant CSV report generation for CI/CD pipelines and risk governance audits.
-6. **Zero External API Dependencies**: Runs completely locally on Windows/Linux without cloud tokens or paid external AI services.
-7. **Warm Human-Centered Design System**: Refined aesthetic featuring ivory backgrounds, charcoal typography, terracotta accents, and sage status badges.
+BugPredict AI is an enterprise-grade automated software defect prediction and code repair engine that uses multi-language AST parsing, static analysis rules, and machine learning risk heuristics.
 
 ---
 
-## 🚀 Quickstart on Windows
+## 🚀 Key Features
+- **Multi-Language AST Analysis**: Java, Python, JavaScript, TypeScript, C++, C#, Go, SQL.
+- **Automated Bug Patching**: Instant auto-remediation for NullPointerExceptions, empty exceptions, loose equality vulnerabilities, and resource leaks.
+- **Zero-Bug Output**: Automatically compiles and packages clean, zero-defect ZIP distributions.
+- **Local & Privacy-Preserving**: No third-party API keys required; 100% on-premise analysis.
 
-### Prerequisites
-- **Java 21+** (JDK 24 compatible)
-- **PowerShell**
+---
 
-### Running the Application
-From the project root:
-```powershell
-.\scripts\run.ps1
+## 🛠️ System Requirements
+- **Java**: JDK 17 or JDK 21+
+- **Build System**: Apache Maven 3.9+ (or included Maven Wrapper `./mvnw`)
+- **Memory**: 2 GB RAM minimum
+
+---
+
+## 📦 Installation & Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Lakshmikala43/Bug_Prediction.git
+   cd Bug_Prediction
+   ```
+
+2. **Install dependencies and verify build:**
+   ```bash
+   ./mvnw clean compile
+   ```
+
+---
+
+## 🧪 Running Tests & Coverage
+
+To run the unit test suite and verify parser evaluation logic:
+```bash
+./mvnw test
 ```
-The application will boot on `http://localhost:8080`.
 
-### Measuring Production LOC
-```powershell
-.\scripts\measure-loc.ps1
+Test results and reports are generated in `target/surefire-reports/`.
+
+---
+
+## 🚀 Running the Application
+
+To start the BugPredict AI server locally:
+```bash
+./mvnw spring-boot:run
+```
+
+Once started, the web application is accessible at:
+```
+http://localhost:8080
 ```
 
 ---
 
-## 🧪 Running Tests
-```powershell
-.\mvnw.cmd test
-```
+## 📁 Project Architecture & Components
+
+- **`src/main/java/com/bugpredict/controller/`**: REST APIs for scan execution, uploads, and reports.
+- **`src/main/java/com/bugpredict/service/parser/`**: AST analyzers and defect remediation rules.
+- **`src/main/java/com/bugpredict/service/prediction/`**: Defect risk scoring and evaluation engine.
+- **`src/main/resources/static/`**: Client interface for project scanning and defect remediation.
+- **`src/test/`**: Unit test suite for AST parser metrics and defect risk logic.
 
 ---
 
-## 📊 Complete User Workflow
-1. **Create Project**: Provide project name and absolute Java source code directory.
-2. **Run Scan**: JavaParser traverses source files, constructs AST trees, and records metrics.
-3. **Inspect Predictions**: Review explainable risk categories (Low, Medium, High, Critical) and metric factors.
-4. **Create Remediation**: Directly convert findings into remediation tasks.
-5. **Export Report**: Download CSV scan audit reports.
+## 🔒 License & Ownership
+Proprietary — All rights reserved. Not licensed under MIT, Apache, or GPL.

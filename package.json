@@ -1,0 +1,11 @@
+{
+  "name": "bugpredict-ai",
+  "version": "1.0.0",
+  "description": "BugPredict AI Code Quality & Defect Remediation Engine",
+  "scripts": {
+    "start": "java -jar target/bugpredict-ai-1.0.0.jar",
+    "build": "./mvnw clean package -DskipTests",
+    "test": "./mvnw test"
+  },
+  "private": true
+}
