@@ -1,13 +1,13 @@
 ﻿:root {
   --bg-primary: #FBF9F5;
   --bg-card: #FFFFFF;
-  --bg-sidebar: #1F2622;
+  --bg-sidebar: #1E2521;
   --text-main: #1C2420;
   --text-muted: #5E6D65;
-  --text-light: #F1F5F2;
   --accent-terracotta: #D96B43;
   --accent-terracotta-hover: #C55B34;
   --accent-sage: #3E885B;
+  --accent-sage-hover: #326E4A;
   --accent-amber: #D9822B;
   --accent-crimson: #C53030;
   --border-subtle: #E8E5DF;
@@ -66,11 +66,12 @@ header {
   color: var(--text-muted);
 }
 
+/* Stepper Bar */
 .stepper-container {
   display: flex;
   justify-content: center;
-  gap: 30px;
-  padding: 24px 0 10px;
+  gap: 32px;
+  padding: 24px 0 12px;
 }
 
 .step-item {
@@ -88,15 +89,16 @@ header {
 }
 
 .step-num {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #EAE6DF;
   color: var(--text-main);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .step-item.active .step-num {
@@ -106,10 +108,10 @@ header {
 
 .main-content {
   flex: 1;
-  max-width: 1100px;
+  max-width: 1050px;
   margin: 0 auto;
   width: 100%;
-  padding: 20px 24px 40px;
+  padding: 20px 24px 50px;
 }
 
 .card {
@@ -124,7 +126,7 @@ header {
   border: 2px dashed var(--accent-terracotta);
   border-radius: var(--radius-md);
   background: #FAF6F0;
-  padding: 60px 20px;
+  padding: 64px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -154,15 +156,16 @@ header {
   background-color: var(--accent-sage);
   color: #fff;
   border: none;
-  padding: 12px 28px;
+  padding: 14px 32px;
   border-radius: var(--radius-sm);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .btn-success:hover {
-  background-color: #326E4A;
+  background-color: var(--accent-sage-hover);
 }
 
 .btn-secondary {
@@ -187,29 +190,48 @@ header {
 .badge-high { background: #FCE8E6; color: #C5221F; }
 .badge-critical { background: #8C1D18; color: #FFFFFF; }
 
-.bug-card {
+/* File Box */
+.file-box {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 16px;
-  margin-top: 14px;
-  background: #FCFBF9;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  background: #fff;
+  overflow: hidden;
 }
 
-.code-snippet {
-  background: #252826;
+.file-box-header {
+  padding: 14px 20px;
+  background: #FAF8F5;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bug-entry {
+  padding: 18px 20px;
+  border-bottom: 1px solid #F3F1EC;
+}
+
+.bug-entry:last-child {
+  border-bottom: none;
+}
+
+.code-box {
+  background: #232724;
   color: #E2E8F0;
-  padding: 12px;
+  padding: 12px 16px;
   border-radius: var(--radius-sm);
   font-family: Consolas, monospace;
   font-size: 12.5px;
-  margin-top: 8px;
-  overflow-x: auto;
+  margin-top: 10px;
+  line-height: 1.6;
 }
 
-.diff-before {
-  color: #FFA590;
+.diff-minus {
+  color: #FF9B8A;
 }
 
-.diff-after {
+.diff-plus {
   color: #8CE3B0;
 }
